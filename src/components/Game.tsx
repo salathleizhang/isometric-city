@@ -1905,9 +1905,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       imageSrc = BUILDING_IMAGES.residential;
     } else if (buildingType === 'mansion') {
       imageSrc = BUILDING_IMAGES.mansion;
-    } else if (['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'].includes(buildingType)) {
+    } else if (buildingType === 'shop_medium') {
+      imageSrc = BUILDING_IMAGES.shop_medium;
+    } else if (['shop_small', 'office_low', 'office_high', 'mall'].includes(buildingType)) {
       imageSrc = BUILDING_IMAGES.commercial;
-    } else if (['factory_small', 'factory_medium', 'factory_large', 'warehouse'].includes(buildingType)) {
+    } else if (buildingType === 'warehouse') {
+      imageSrc = BUILDING_IMAGES.warehouse;
+    } else if (['factory_small', 'factory_medium', 'factory_large'].includes(buildingType)) {
       imageSrc = BUILDING_IMAGES.industrial;
     } else if (BUILDING_IMAGES[buildingType]) {
       imageSrc = BUILDING_IMAGES[buildingType];
