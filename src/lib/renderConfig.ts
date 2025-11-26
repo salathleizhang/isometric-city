@@ -90,6 +90,7 @@ const SPRITE_PACK_RED: SpritePack = {
     water_tower: -0.30,
     airport: -0.8,
     university: -0.3,
+    space_program: -0.15,
   },
   horizontalOffsets: {
     university: 0.3,
@@ -192,6 +193,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     tennis: 0.10,
     water_tower: -0.30,
     airport: -0.8,
+    space_program: -0.15,
   },
   horizontalOffsets: {
     university: -0.6,
@@ -287,6 +289,7 @@ const SPRITE_PACK_SPRITES4_BG: SpritePack = {
     water_tower: -0.30,
     airport: -0.8,
     university: -0.3,
+    space_program: -0.15,
   },
   horizontalOffsets: {
     university: 0.3,

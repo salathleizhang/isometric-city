@@ -177,11 +177,24 @@ function findPathOnRoads(
 ): { x: number; y: number }[] | null {
   // Find the nearest road tile to the target (since buildings aren't on roads)
   const targetRoad = findNearestRoadToBuilding(gridData, gridSizeValue, targetX, targetY);
-  if (!targetRoad) return null;
+  if (!targetRoad) {
+    console.log(`[Pathfinding] No road found near target (${targetX},${targetY})`);
+    return null;
+  }
   
   // Find the nearest road tile to the start (station)
   const startRoad = findNearestRoadToBuilding(gridData, gridSizeValue, startX, startY);
-  if (!startRoad) return null;
+  if (!startRoad) {
+    console.log(`[Pathfinding] No road found near start (${startX},${startY})`);
+    return null;
+  }
+  
+  console.log(`[Pathfinding] Finding path from road (${startRoad.x},${startRoad.y}) to road (${targetRoad.x},${targetRoad.y})`);
+  
+  // If start and target roads are the same, return a simple path
+  if (startRoad.x === targetRoad.x && startRoad.y === targetRoad.y) {
+    return [{ x: startRoad.x, y: startRoad.y }];
+  }
   
   // BFS from start road to target road
   const queue: { x: number; y: number; path: { x: number; y: number }[] }[] = [
@@ -202,6 +215,7 @@ function findPathOnRoads(
     
     // Check if we reached the target road
     if (current.x === targetRoad.x && current.y === targetRoad.y) {
+      console.log(`[Pathfinding] Path found with ${current.path.length} tiles`);
       return current.path;
     }
     
@@ -223,6 +237,7 @@ function findPathOnRoads(
     }
   }
   
+  console.log(`[Pathfinding] No path found between roads`);
   return null; // No path found
 }
 
@@ -233,12 +248,16 @@ function findNearestRoadToBuilding(
   buildingX: number,
   buildingY: number
 ): { x: number; y: number } | null {
-  // Check adjacent tiles first (distance 1)
+  // Check adjacent tiles first (distance 1) - including diagonals
   const adjacentOffsets = [
     { dx: -1, dy: 0 },
     { dx: 1, dy: 0 },
     { dx: 0, dy: -1 },
     { dx: 0, dy: 1 },
+    { dx: -1, dy: -1 },
+    { dx: -1, dy: 1 },
+    { dx: 1, dy: -1 },
+    { dx: 1, dy: 1 },
   ];
   
   for (const { dx, dy } of adjacentOffsets) {
@@ -249,14 +268,14 @@ function findNearestRoadToBuilding(
     }
   }
   
-  // BFS to find nearest road within reasonable distance
+  // BFS to find nearest road within reasonable distance (increased to 20)
   const queue: { x: number; y: number; dist: number }[] = [{ x: buildingX, y: buildingY, dist: 0 }];
   const visited = new Set<string>();
   visited.add(`${buildingX},${buildingY}`);
   
   while (queue.length > 0) {
     const current = queue.shift()!;
-    if (current.dist > 10) break; // Max search distance
+    if (current.dist > 20) break; // Increased max search distance
     
     for (const { dx, dy } of adjacentOffsets) {
       const nx = current.x + dx;
@@ -1825,12 +1844,19 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     if (!currentGrid || currentGridSize <= 0) return false;
 
     const path = findPathOnRoads(currentGrid, currentGridSize, stationX, stationY, targetX, targetY);
-    if (!path || path.length < 2) return false;
+    if (!path || path.length === 0) return false;
 
     const startTile = path[0];
-    const nextTile = path[1];
-    const direction = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
-    if (!direction) return false;
+    let direction: CarDirection = 'south'; // Default direction
+    
+    // If path has at least 2 tiles, get direction from first to second
+    if (path.length >= 2) {
+      const nextTile = path[1];
+      const dir = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
+      if (dir) direction = dir;
+    }
+
+    console.log(`[Emergency] Creating ${type} at (${startTile.x},${startTile.y}) with path of ${path.length} tiles`);
 
     emergencyVehiclesRef.current.push({
       id: emergencyVehicleIdRef.current++,
@@ -1858,11 +1884,22 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   // Update emergency vehicles dispatch logic
   const updateEmergencyDispatch = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
-
-    // Find fires that need trucks dispatched
+    
+    // Always log what we find
     const fires = findFires();
     const fireStations = findStations('fire_station');
+    
+    // Debug logging - always log station count, and fire count if any
+    if (fireStations.length > 0 || fires.length > 0) {
+      console.log(`[Emergency] Stations: ${fireStations.length} fire stations | Fires: ${fires.length} | Speed: ${currentSpeed}`);
+    }
+    
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      if (fires.length > 0) {
+        console.log(`[Emergency] Skipping dispatch - game paused or no grid`);
+      }
+      return;
+    }
     
     for (const fire of fires) {
       const fireKey = `${fire.x},${fire.y}`;
@@ -1881,9 +1918,15 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       }
       
       if (nearestStation) {
+        console.log(`[Emergency] Attempting to dispatch fire truck from (${nearestStation.x},${nearestStation.y}) to fire at (${fire.x},${fire.y})`);
         if (dispatchEmergencyVehicle('fire_truck', nearestStation.x, nearestStation.y, fire.x, fire.y)) {
           activeFiresRef.current.add(fireKey);
+          console.log(`[Emergency] Fire truck dispatched successfully!`);
+        } else {
+          console.log(`[Emergency] Failed to dispatch fire truck - no valid road path`);
         }
+      } else {
+        console.log(`[Emergency] Fire at (${fire.x},${fire.y}) but no fire stations found`);
       }
     }
 
@@ -1934,7 +1977,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     emergencyDispatchTimerRef.current -= delta;
     if (emergencyDispatchTimerRef.current <= 0) {
       updateEmergencyDispatch();
-      emergencyDispatchTimerRef.current = 1.0 + Math.random() * 0.5;
+      emergencyDispatchTimerRef.current = 1.5;
     }
 
     const updatedVehicles: EmergencyVehicle[] = [];
@@ -2219,6 +2262,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
     
+    // Log count periodically
+    if (emergencyVehiclesRef.current.length > 0) {
+      // Only log occasionally to avoid spam
+      if (Math.random() < 0.01) {
+        console.log(`[Emergency] Drawing ${emergencyVehiclesRef.current.length} emergency vehicles`);
+      }
+    }
+    
     // Early exit if no emergency vehicles
     if (!currentGrid || currentGridSize <= 0 || emergencyVehiclesRef.current.length === 0) {
       return;
@@ -2277,90 +2328,107 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       const vehicleX = centerX + meta.vec.dx * vehicle.progress + meta.normal.nx * vehicle.laneOffset;
       const vehicleY = centerY + meta.vec.dy * vehicle.progress + meta.normal.ny * vehicle.laneOffset;
       
-      if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
-        return;
-      }
-      
-      // Check if vehicle is behind a building
-      if (isVehicleBehindBuilding(vehicle.tileX, vehicle.tileY)) {
-        return;
-      }
+      // Skip view culling and building occlusion for now - we want to see them!
+      // if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
+      //   return;
+      // }
       
       ctx.save();
       ctx.translate(vehicleX, vehicleY);
       ctx.rotate(meta.angle);
       
-      const scale = 0.85; // Emergency vehicles are slightly larger
+      const scale = 1.2; // Make emergency vehicles BIGGER and more visible
       
-      // Vehicle body color
-      const bodyColor = vehicle.type === 'fire_truck' ? '#dc2626' : '#1e40af';
-      const bodyColorLight = vehicle.type === 'fire_truck' ? '#ef4444' : '#3b82f6';
+      // Vehicle body color - brighter colors
+      const bodyColor = vehicle.type === 'fire_truck' ? '#ff0000' : '#0066ff';
       
       // Draw vehicle body (longer for fire trucks)
-      const length = vehicle.type === 'fire_truck' ? 14 : 11;
+      const length = vehicle.type === 'fire_truck' ? 16 : 13;
       ctx.fillStyle = bodyColor;
       ctx.beginPath();
-      ctx.moveTo(-length * scale, -5 * scale);
-      ctx.lineTo(length * scale, -5 * scale);
-      ctx.lineTo((length + 2) * scale, 0);
-      ctx.lineTo(length * scale, 5 * scale);
-      ctx.lineTo(-length * scale, 5 * scale);
+      ctx.moveTo(-length * scale, -6 * scale);
+      ctx.lineTo(length * scale, -6 * scale);
+      ctx.lineTo((length + 3) * scale, 0);
+      ctx.lineTo(length * scale, 6 * scale);
+      ctx.lineTo(-length * scale, 6 * scale);
       ctx.closePath();
       ctx.fill();
       
-      // Draw stripe/accent
-      ctx.fillStyle = vehicle.type === 'fire_truck' ? '#fbbf24' : '#ffffff';
-      ctx.fillRect(-length * scale * 0.6, -4 * scale, length * scale * 1.2, 8 * scale * 0.3);
+      // Draw stripe/accent - brighter
+      ctx.fillStyle = vehicle.type === 'fire_truck' ? '#ffff00' : '#ffffff';
+      ctx.fillRect(-length * scale * 0.7, -4 * scale, length * scale * 1.4, 8 * scale * 0.4);
       
       // Draw windshield
-      ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
-      ctx.fillRect(-2 * scale, -3 * scale, 6 * scale, 6 * scale);
+      ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
+      ctx.fillRect(-3 * scale, -4 * scale, 8 * scale, 8 * scale);
       
-      // Draw emergency lights (flashing)
+      // Draw emergency lights (flashing) - MUCH bigger and brighter
       const flashOn = Math.sin(vehicle.flashTimer) > 0;
       const flashOn2 = Math.sin(vehicle.flashTimer + Math.PI) > 0;
       
-      // Light bar on top
+      // Light bar on top - bigger
       if (vehicle.type === 'fire_truck') {
         // Fire truck has red lights
-        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
-        ctx.fillRect(-8 * scale, -6 * scale, 4 * scale, 3 * scale);
-        ctx.fillStyle = flashOn2 ? '#ff0000' : '#880000';
-        ctx.fillRect(4 * scale, -6 * scale, 4 * scale, 3 * scale);
+        ctx.fillStyle = flashOn ? '#ff0000' : '#660000';
+        ctx.fillRect(-10 * scale, -10 * scale, 6 * scale, 5 * scale);
+        ctx.fillStyle = flashOn2 ? '#ff0000' : '#660000';
+        ctx.fillRect(4 * scale, -10 * scale, 6 * scale, 5 * scale);
         
-        // Add glow effect when lights are on
-        if (flashOn || flashOn2) {
+        // Add STRONG glow effect when lights are on
+        if (flashOn) {
           ctx.shadowColor = '#ff0000';
-          ctx.shadowBlur = 8;
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-          ctx.fillRect(-10 * scale, -7 * scale, 20 * scale, 5 * scale);
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+          ctx.beginPath();
+          ctx.arc(-7 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+        if (flashOn2) {
+          ctx.shadowColor = '#ff0000';
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+          ctx.beginPath();
+          ctx.arc(7 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
+          ctx.fill();
           ctx.shadowBlur = 0;
         }
       } else {
         // Police car has red and blue lights
-        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
-        ctx.fillRect(-6 * scale, -6 * scale, 3 * scale, 3 * scale);
-        ctx.fillStyle = flashOn2 ? '#0066ff' : '#003388';
-        ctx.fillRect(3 * scale, -6 * scale, 3 * scale, 3 * scale);
+        ctx.fillStyle = flashOn ? '#ff0000' : '#660000';
+        ctx.fillRect(-8 * scale, -10 * scale, 5 * scale, 5 * scale);
+        ctx.fillStyle = flashOn2 ? '#0088ff' : '#003366';
+        ctx.fillRect(3 * scale, -10 * scale, 5 * scale, 5 * scale);
         
-        // Add glow effect
-        if (flashOn || flashOn2) {
-          ctx.shadowColor = flashOn ? '#ff0000' : '#0066ff';
-          ctx.shadowBlur = 8;
-          ctx.fillStyle = flashOn ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 100, 255, 0.3)';
-          ctx.fillRect(-8 * scale, -7 * scale, 16 * scale, 5 * scale);
+        // Add STRONG glow effect
+        if (flashOn) {
+          ctx.shadowColor = '#ff0000';
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+          ctx.beginPath();
+          ctx.arc(-5 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+        if (flashOn2) {
+          ctx.shadowColor = '#0088ff';
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = 'rgba(0, 136, 255, 0.6)';
+          ctx.beginPath();
+          ctx.arc(5 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
+          ctx.fill();
           ctx.shadowBlur = 0;
         }
       }
       
       // Draw rear wheels/details
       ctx.fillStyle = '#111827';
-      ctx.fillRect(-length * scale, -4 * scale, 2.5 * scale, 8 * scale);
+      ctx.fillRect(-length * scale, -5 * scale, 3 * scale, 10 * scale);
       
-      // Headlights
-      ctx.fillStyle = vehicle.state !== 'returning' ? 'rgba(255, 255, 200, 0.9)' : 'rgba(255, 255, 200, 0.5)';
-      ctx.fillRect((length - 1) * scale, -2.5 * scale, 2.5 * scale, 2 * scale);
-      ctx.fillRect((length - 1) * scale, 0.5 * scale, 2.5 * scale, 2 * scale);
+      // Headlights - brighter
+      ctx.fillStyle = vehicle.state !== 'returning' ? '#ffffcc' : 'rgba(255, 255, 200, 0.5)';
+      ctx.fillRect((length - 1) * scale, -3 * scale, 3 * scale, 2.5 * scale);
+      ctx.fillRect((length - 1) * scale, 0.5 * scale, 3 * scale, 2.5 * scale);
       
       ctx.restore();
     });
@@ -2511,6 +2579,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     const waterQueue: BuildingDraw[] = [];
     const beachQueue: BuildingDraw[] = [];
     const baseTileQueue: BuildingDraw[] = [];
+    const greenBaseTileQueue: BuildingDraw[] = [];
     const overlayQueue: OverlayDraw[] = [];
     
     // Helper function to check if a tile is adjacent to water
@@ -2557,9 +2626,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           y >= Math.min(dragStartTile.y, dragEndTile.y) &&
           y <= Math.max(dragStartTile.y, dragEndTile.y);
         
-        // Draw base tile for all tiles (including water), but skip gray bases for buildings
-        drawIsometricTile(ctx, screenX, screenY, tile, !!(isHovered || isSelected || isInDragRect), zoom, true);
-        
         // Check if this tile needs a gray base tile (buildings except parks)
         const isPark = tile.building.type === 'park' || tile.building.type === 'park_large' || tile.building.type === 'tennis' ||
                        (tile.building.type === 'empty' && isPartOfParkBuilding(x, y));
@@ -2572,8 +2638,19 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         const isPartOfBuilding = tile.building.type === 'empty' && isPartOfMultiTileBuilding(x, y);
         const needsGreyBase = (isDirectBuilding || isPartOfBuilding) && !isPark;
         
+        // Check if this is a grass/empty tile adjacent to water (needs green base drawn over water)
+        const isGrassOrEmpty = tile.building.type === 'grass' || tile.building.type === 'empty';
+        const needsGreenBaseOverWater = isGrassOrEmpty && isAdjacentToWater(x, y);
+        
+        // Draw base tile for all tiles (including water), but skip gray bases for buildings and green bases for grass/empty adjacent to water
+        drawIsometricTile(ctx, screenX, screenY, tile, !!(isHovered || isSelected || isInDragRect), zoom, true, needsGreenBaseOverWater);
+        
         if (needsGreyBase) {
           baseTileQueue.push({ screenX, screenY, tile, depth: x + y });
+        }
+        
+        if (needsGreenBaseOverWater) {
+          greenBaseTileQueue.push({ screenX, screenY, tile, depth: x + y });
         }
         
         // Separate water tiles into their own queue (drawn after base tiles, below other buildings)
@@ -2613,6 +2690,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       .sort((a, b) => a.depth - b.depth)
       .forEach(({ tile, screenX, screenY }) => {
         drawBuilding(ctx, screenX, screenY, tile);
+      });
+    
+    // Draw green base tiles for grass/empty tiles adjacent to water (after water, before gray bases)
+    greenBaseTileQueue
+      .sort((a, b) => a.depth - b.depth)
+      .forEach(({ tile, screenX, screenY }) => {
+        drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
       });
     
     // Draw gray building base tiles (after water, before buildings)
@@ -2681,7 +2765,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     ctx.restore();
   }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack]);
   
-  // Animate decorative car traffic on top of the base canvas
+  // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
     const canvas = carsCanvasRef.current;
     if (!canvas) return;
@@ -2699,16 +2783,18 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       lastTime = time;
       if (delta > 0) {
         updateCars(delta);
+        updateEmergencyVehicles(delta); // Update emergency vehicles!
       }
       drawCars(ctx);
+      drawEmergencyVehicles(ctx); // Draw emergency vehicles!
     };
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, updateEmergencyVehicles, drawEmergencyVehicles]);
   
   // Draw isometric tile base
-  function drawIsometricTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, highlight: boolean, currentZoom: number, skipGreyBase: boolean = false) {
+  function drawIsometricTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, highlight: boolean, currentZoom: number, skipGreyBase: boolean = false, skipGreenBase: boolean = false) {
     const w = TILE_WIDTH;
     const h = TILE_HEIGHT;
     
@@ -2791,6 +2877,82 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       strokeColor = '#f59e0b';
     }
     
+    // Skip drawing green base for grass/empty tiles adjacent to water (will be drawn later over water)
+    const shouldSkipDrawing = skipGreenBase && (tile.building.type === 'grass' || tile.building.type === 'empty');
+    
+    // Draw the isometric diamond (top face)
+    if (!shouldSkipDrawing) {
+      ctx.fillStyle = topColor;
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h / 2);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw grid lines only when zoomed in (hide when zoom < 0.6)
+      if (currentZoom >= 0.6) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+      
+      // Draw zone border with dashed line (hide when zoomed out, only on grass/empty tiles - not on roads or buildings)
+      if (tile.zone !== 'none' && 
+          currentZoom >= 0.95 &&
+          (tile.building.type === 'grass' || tile.building.type === 'empty')) {
+        ctx.strokeStyle = tile.zone === 'residential' ? '#22c55e' : 
+                          tile.zone === 'commercial' ? '#3b82f6' : '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    
+    // Highlight on hover/select (always draw, even if base was skipped)
+    if (highlight) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h / 2);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+  
+  // Draw green base tile for grass/empty tiles (called after water tiles)
+  function drawGreenBaseTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, currentZoom: number) {
+    const w = TILE_WIDTH;
+    const h = TILE_HEIGHT;
+    
+    // Determine green base colors based on zone
+    let topColor = '#4a7c3f'; // default grass
+    let leftColor = '#3d6634';
+    let rightColor = '#5a8f4f';
+    let strokeColor = '#2d4a26';
+    
+    if (tile.zone === 'residential') {
+      topColor = '#2d5a2d';
+      leftColor = '#1d4a1d';
+      rightColor = '#3d6a3d';
+      strokeColor = '#22c55e';
+    } else if (tile.zone === 'commercial') {
+      topColor = '#2a4a6a';
+      leftColor = '#1a3a5a';
+      rightColor = '#3a5a7a';
+      strokeColor = '#3b82f6';
+    } else if (tile.zone === 'industrial') {
+      topColor = '#6a4a2a';
+      leftColor = '#5a3a1a';
+      rightColor = '#7a5a3a';
+      strokeColor = '#f59e0b';
+    }
+    
     // Draw the isometric diamond (top face)
     ctx.fillStyle = topColor;
     ctx.beginPath();
@@ -2808,23 +2970,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       ctx.stroke();
     }
     
-    // Draw zone border with dashed line (hide when zoomed out, only on grass/empty tiles - not on roads or buildings)
-    if (tile.zone !== 'none' && 
-        currentZoom >= 0.95 &&
-        (tile.building.type === 'grass' || tile.building.type === 'empty')) {
+    // Draw zone border with dashed line (hide when zoomed out, only on grass/empty tiles)
+    if (tile.zone !== 'none' && currentZoom >= 0.95) {
       ctx.strokeStyle = tile.zone === 'residential' ? '#22c55e' : 
                         tile.zone === 'commercial' ? '#3b82f6' : '#f59e0b';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 2]);
       ctx.stroke();
       ctx.setLineDash([]);
-    }
-    
-    // Highlight on hover/select
-    if (highlight) {
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
     }
   }
   
@@ -3541,6 +3694,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           // Special scale adjustment for airport (scaled up 15% from previous)
           if (buildingType === 'airport') {
             scaleMultiplier *= 0.8625; // 0.75 * 1.15 = 0.8625 (15% larger than before)
+          }
+          // Special scale adjustment for space_program (scaled up 25%)
+          if (buildingType === 'space_program') {
+            scaleMultiplier *= 1.25;
           }
           const destWidth = w * 1.2 * scaleMultiplier;
           const aspectRatio = coords.sh / coords.sw;  // height/width ratio of source

@@ -1016,16 +1016,17 @@ export function simulateTick(state: GameState): GameState {
       const buildingStats = BUILDING_STATS[tile.building.type];
       tile.pollution = Math.max(0, tile.pollution * 0.95 + buildingStats.pollution);
 
-      // Fire simulation
+      // Fire simulation - fires progress slowly to allow fire trucks to respond
       if (state.disastersEnabled && tile.building.onFire) {
         const fireCoverage = services.fire[y][x];
-        const fightingChance = fireCoverage / 200;
+        const fightingChance = fireCoverage / 300; // Reduced from 200 - harder to extinguish without trucks
         
         if (Math.random() < fightingChance) {
           tile.building.onFire = false;
           tile.building.fireProgress = 0;
         } else {
-          tile.building.fireProgress += 5;
+          // Fire spreads slowly - takes ~100 ticks to destroy a building
+          tile.building.fireProgress += 1;
           if (tile.building.fireProgress >= 100) {
             // Building destroyed
             tile.building = createBuilding('grass');
@@ -1034,11 +1035,12 @@ export function simulateTick(state: GameState): GameState {
         }
       }
 
-      // Random fire start (very rare - approximately 1 fire per 50,000 building-ticks)
+      // Random fire start (more common to see the mechanic)
       if (state.disastersEnabled && !tile.building.onFire && 
           tile.building.type !== 'grass' && tile.building.type !== 'water' && 
           tile.building.type !== 'road' && tile.building.type !== 'tree' &&
-          Math.random() < 0.00002) {
+          tile.building.type !== 'empty' &&
+          Math.random() < 0.00008) {
         tile.building.onFire = true;
         tile.building.fireProgress = 0;
       }
