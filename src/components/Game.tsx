@@ -763,7 +763,7 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
     if (viewport) {
       const { offset, zoom, canvasSize } = viewport;
       
-      // Calculate the corners of the viewport in screen space (before zoom)
+      // Calculate the corners of the viewport in screen space
       // Then convert to grid coordinates
       const topLeftScreen = { x: 0, y: 0 };
       const topRightScreen = { x: canvasSize.width, y: 0 };
@@ -785,8 +785,9 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
       const bottomRight = screenToGridForMinimap(bottomRightScreen.x, bottomRightScreen.y);
       
       // Draw the viewport as a quadrilateral (it's a diamond in isometric)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 1.5;
+      // Use a thin white stroke for a subtle indicator
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(topLeft.gridX * scale, topLeft.gridY * scale);
       ctx.lineTo(topRight.gridX * scale, topRight.gridY * scale);
@@ -794,10 +795,6 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
       ctx.lineTo(bottomLeft.gridX * scale, bottomLeft.gridY * scale);
       ctx.closePath();
       ctx.stroke();
-      
-      // Add a subtle fill
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.fill();
     }
   }, [grid, gridSize, viewport]);
 
