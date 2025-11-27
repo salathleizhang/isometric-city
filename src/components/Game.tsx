@@ -75,20 +75,6 @@ type Car = {
 type EmergencyVehicleType = 'fire_truck' | 'police_car';
 type EmergencyVehicleState = 'dispatching' | 'responding' | 'returning';
 
-// News ticker types
-type NewsCategory = 'breaking' | 'economy' | 'weather' | 'traffic' | 'crime' | 'achievement' | 'general' | 'sports' | 'politics';
-type NewsPriority = 'urgent' | 'high' | 'normal' | 'low';
-
-interface NewsItem {
-  id: string;
-  category: NewsCategory;
-  priority: NewsPriority;
-  headline: string;
-  timestamp: number;
-  icon: string;
-  color: string;
-}
-
 type EmergencyVehicle = {
   id: number;
   type: EmergencyVehicleType;
@@ -489,426 +475,6 @@ const TimeOfDayIcon = ({ hour }: { hour: number }) => {
     );
   }
 };
-
-// News category configuration
-const NEWS_CATEGORIES: Record<NewsCategory, { icon: string; color: string; bgColor: string }> = {
-  breaking: { icon: '🔴', color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  economy: { icon: '📈', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  weather: { icon: '🌤️', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  traffic: { icon: '🚗', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  crime: { icon: '🚨', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
-  achievement: { icon: '🏆', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  general: { icon: '📰', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
-  sports: { icon: '⚽', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
-  politics: { icon: '🏛️', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-};
-
-// Headline templates for dynamic news generation
-const HEADLINE_TEMPLATES = {
-  // Economy headlines
-  economyGood: [
-    "Local businesses report record profits this quarter",
-    "Commercial district sees surge in new store openings",
-    "Economists praise {cityName}'s growth strategy",
-    "Property values up {percent}% in downtown area",
-    "New businesses creating hundreds of jobs in {cityName}",
-    "Tourism revenue reaches all-time high",
-    "Tech sector expansion brings new opportunities",
-  ],
-  economyBad: [
-    "Business owners express concerns over economic slowdown",
-    "Commercial vacancies rise in central district",
-    "Local retailers struggle amid changing market",
-    "Analysts warn of potential budget shortfall",
-  ],
-  // Crime headlines
-  crimeHigh: [
-    "Police chief calls for increased patrols in {area}",
-    "Residents voice safety concerns at town hall meeting",
-    "Neighborhood watch programs expand citywide",
-    "Crime statistics prompt call for more police funding",
-  ],
-  crimeLow: [
-    "Crime rates drop to historic lows in {cityName}",
-    "Police department celebrates reduced incident reports",
-    "Community policing initiatives show positive results",
-    "Safe city award nomination announced for {cityName}",
-  ],
-  // Fire/Emergency headlines
-  fireActive: [
-    "BREAKING: Fire crews responding to blaze in {area}",
-    "Emergency services battle structure fire",
-    "Fire department issues safety advisory",
-    "Multiple units dispatched to reported fire",
-  ],
-  fireResolved: [
-    "Fire successfully contained by local crews",
-    "No injuries reported in yesterday's fire incident",
-    "Fire chief commends quick response time",
-  ],
-  // Traffic headlines
-  trafficHeavy: [
-    "Rush hour congestion reported on major routes",
-    "Traffic advisory: Delays expected in downtown",
-    "Transportation department studying traffic solutions",
-    "Commuters urged to use alternate routes",
-  ],
-  trafficLight: [
-    "New traffic management system reduces congestion",
-    "Weekend traffic flows smoothly across {cityName}",
-    "Subway ridership up, road congestion down",
-  ],
-  // Weather headlines
-  weatherDay: [
-    "Beautiful weather expected throughout the day",
-    "Clear skies forecast for {cityName} area",
-    "Perfect conditions for outdoor activities today",
-    "Sunny with highs in the mid-70s expected",
-  ],
-  weatherNight: [
-    "Clear skies expected overnight",
-    "Comfortable temperatures for evening commute",
-    "Stargazing conditions excellent tonight",
-  ],
-  weatherDawn: [
-    "Early morning fog clearing by mid-morning",
-    "Sunrise brings promise of another fine day",
-  ],
-  weatherDusk: [
-    "Beautiful sunset expected this evening",
-    "Temperatures cooling as night approaches",
-  ],
-  // Achievement headlines
-  populationMilestone: [
-    "CELEBRATION: {cityName} population reaches {milestone}!",
-    "Mayor declares city-wide celebration for population milestone",
-    "{cityName} officially joins the ranks of major cities",
-  ],
-  // General/Flavor headlines
-  general: [
-    "Local artist unveils new sculpture in Central Park",
-    "Community garden project receives overwhelming support",
-    "Annual city festival dates announced",
-    "Historic building restoration project nears completion",
-    "Youth sports league registration opens next week",
-    "Library announces expanded weekend hours",
-    "City council approves new bike lane proposal",
-    "Local school wins state academic competition",
-    "Farmers market returns to downtown this weekend",
-    "New playground equipment installed in {area} Park",
-    "Volunteer appreciation day celebrated across {cityName}",
-    "Senior center launches new wellness program",
-    "City orchestra announces free concert series",
-    "Dog park expansion project breaks ground",
-    "Local chef featured in national food magazine",
-  ],
-  // Sports headlines (if stadium exists)
-  sports: [
-    "Hometown team prepares for championship run",
-    "Record attendance at last night's game",
-    "Sports complex hosts regional tournament",
-    "Youth athletics program sees record enrollment",
-    "Stadium renovation plans unveiled",
-  ],
-  // Politics headlines
-  politics: [
-    "Mayor announces infrastructure improvement plan",
-    "City council debates zoning reform proposal",
-    "Public hearing scheduled for transit expansion",
-    "Budget committee reviews spending priorities",
-    "Residents invited to town hall meeting next week",
-    "Environmental task force presents recommendations",
-  ],
-  // Education headlines
-  education: [
-    "School district receives excellence award",
-    "University announces new research partnership",
-    "Adult education programs expand offerings",
-    "Scholarship fund reaches new milestone",
-  ],
-  // Health headlines
-  health: [
-    "Hospital opens new emergency wing",
-    "Community health fair scheduled for Saturday",
-    "Vaccination clinic sees strong turnout",
-    "Mental health awareness campaign launches",
-  ],
-  // Environment headlines
-  environmentGood: [
-    "Air quality reaches 'excellent' rating",
-    "Tree planting initiative exceeds goals",
-    "Parks department announces green space expansion",
-    "Recycling rates continue upward trend",
-  ],
-  environmentBad: [
-    "Environmental groups call for pollution controls",
-    "Air quality concerns prompt health advisory",
-    "Industrial emissions under review",
-  ],
-};
-
-// Generate a random headline from a template category
-const generateHeadline = (templates: string[], cityName: string, area?: string, milestone?: string, percent?: number): string => {
-  const template = templates[Math.floor(Math.random() * templates.length)];
-  return template
-    .replace('{cityName}', cityName)
-    .replace('{area}', area || 'Downtown')
-    .replace('{milestone}', milestone || '10,000')
-    .replace('{percent}', String(percent || Math.floor(Math.random() * 15 + 5)));
-};
-
-// News Ticker Component
-const NewsTicker = React.memo(function NewsTicker() {
-  const { state } = useGame();
-  const { stats, cityName, year, month, hour, grid, gridSize, services } = state;
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
-  const [isPaused, setIsPaused] = useState(false);
-  const lastPopulationRef = useRef(stats.population);
-  const lastGenerationRef = useRef(0);
-  const newsIdRef = useRef(0);
-  
-  // Generate news based on game state
-  const generateNews = useCallback(() => {
-    const newNews: NewsItem[] = [];
-    const now = Date.now();
-    
-    // Helper to create a news item
-    const createNews = (
-      category: NewsCategory,
-      priority: NewsPriority,
-      headline: string
-    ): NewsItem => ({
-      id: `news-${newsIdRef.current++}`,
-      category,
-      priority,
-      headline,
-      timestamp: now,
-      icon: NEWS_CATEGORIES[category].icon,
-      color: NEWS_CATEGORIES[category].color,
-    });
-    
-    // Check for active fires (breaking news)
-    let fireCount = 0;
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        if (grid[y]?.[x]?.building?.onFire) fireCount++;
-      }
-    }
-    if (fireCount > 0 && Math.random() < 0.3) {
-      newNews.push(createNews(
-        'breaking',
-        'urgent',
-        generateHeadline(HEADLINE_TEMPLATES.fireActive, cityName)
-      ));
-    }
-    
-    // Economy news based on demand and jobs
-    if (Math.random() < 0.15) {
-      const jobRatio = stats.jobs / Math.max(1, stats.population);
-      if (jobRatio > 0.9 || stats.demand.commercial > 30) {
-        newNews.push(createNews(
-          'economy',
-          'normal',
-          generateHeadline(HEADLINE_TEMPLATES.economyGood, cityName)
-        ));
-      } else if (jobRatio < 0.6 || stats.demand.commercial < -20) {
-        newNews.push(createNews(
-          'economy',
-          'normal',
-          generateHeadline(HEADLINE_TEMPLATES.economyBad, cityName)
-        ));
-      }
-    }
-    
-    // Crime news based on safety rating
-    if (Math.random() < 0.12) {
-      if (stats.safety > 70) {
-        newNews.push(createNews(
-          'crime',
-          'normal',
-          generateHeadline(HEADLINE_TEMPLATES.crimeLow, cityName)
-        ));
-      } else if (stats.safety < 40) {
-        newNews.push(createNews(
-          'crime',
-          'high',
-          generateHeadline(HEADLINE_TEMPLATES.crimeHigh, cityName)
-        ));
-      }
-    }
-    
-    // Weather news based on time of day
-    if (Math.random() < 0.1) {
-      if (hour >= 7 && hour < 18) {
-        newNews.push(createNews('weather', 'low', generateHeadline(HEADLINE_TEMPLATES.weatherDay, cityName)));
-      } else if (hour >= 5 && hour < 7) {
-        newNews.push(createNews('weather', 'low', generateHeadline(HEADLINE_TEMPLATES.weatherDawn, cityName)));
-      } else if (hour >= 18 && hour < 20) {
-        newNews.push(createNews('weather', 'low', generateHeadline(HEADLINE_TEMPLATES.weatherDusk, cityName)));
-      } else {
-        newNews.push(createNews('weather', 'low', generateHeadline(HEADLINE_TEMPLATES.weatherNight, cityName)));
-      }
-    }
-    
-    // Traffic news
-    if (Math.random() < 0.1) {
-      // Check if it's rush hour
-      const isRushHour = (hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19);
-      if (isRushHour && stats.population > 1000) {
-        newNews.push(createNews('traffic', 'normal', generateHeadline(HEADLINE_TEMPLATES.trafficHeavy, cityName)));
-      } else {
-        newNews.push(createNews('traffic', 'low', generateHeadline(HEADLINE_TEMPLATES.trafficLight, cityName)));
-      }
-    }
-    
-    // Environment news
-    if (Math.random() < 0.08) {
-      if (stats.environment > 70) {
-        newNews.push(createNews('general', 'normal', generateHeadline(HEADLINE_TEMPLATES.environmentGood, cityName)));
-      } else if (stats.environment < 40) {
-        newNews.push(createNews('general', 'normal', generateHeadline(HEADLINE_TEMPLATES.environmentBad, cityName)));
-      }
-    }
-    
-    // Education news
-    if (Math.random() < 0.06 && stats.education > 50) {
-      newNews.push(createNews('general', 'normal', generateHeadline(HEADLINE_TEMPLATES.education, cityName)));
-    }
-    
-    // Health news
-    if (Math.random() < 0.06 && stats.health > 50) {
-      newNews.push(createNews('general', 'normal', generateHeadline(HEADLINE_TEMPLATES.health, cityName)));
-    }
-    
-    // Sports news (if population is decent)
-    if (Math.random() < 0.08 && stats.population > 5000) {
-      newNews.push(createNews('sports', 'normal', generateHeadline(HEADLINE_TEMPLATES.sports, cityName)));
-    }
-    
-    // Politics news
-    if (Math.random() < 0.1) {
-      newNews.push(createNews('politics', 'normal', generateHeadline(HEADLINE_TEMPLATES.politics, cityName)));
-    }
-    
-    // General/flavor news (always generate at least one)
-    if (newNews.length === 0 || Math.random() < 0.2) {
-      newNews.push(createNews('general', 'low', generateHeadline(HEADLINE_TEMPLATES.general, cityName)));
-    }
-    
-    // Population milestone check
-    const milestones = [100, 500, 1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
-    for (const milestone of milestones) {
-      if (stats.population >= milestone && lastPopulationRef.current < milestone) {
-        newNews.unshift(createNews(
-          'achievement',
-          'urgent',
-          generateHeadline(HEADLINE_TEMPLATES.populationMilestone, cityName, undefined, milestone.toLocaleString())
-        ));
-        break;
-      }
-    }
-    lastPopulationRef.current = stats.population;
-    
-    return newNews;
-  }, [cityName, grid, gridSize, hour, stats]);
-  
-  // Generate news periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      // Generate new news every 8-15 seconds
-      if (now - lastGenerationRef.current > 8000 + Math.random() * 7000) {
-        lastGenerationRef.current = now;
-        const newNews = generateNews();
-        setNewsItems(prev => {
-          // Keep only the last 20 items, add new ones at the start
-          const combined = [...newNews, ...prev].slice(0, 20);
-          return combined;
-        });
-      }
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, [generateNews]);
-  
-  // Initialize with some news
-  useEffect(() => {
-    const initialNews = generateNews();
-    // Generate a few more for variety
-    const moreNews = generateNews();
-    setNewsItems([...initialNews, ...moreNews].slice(0, 8));
-    lastGenerationRef.current = Date.now();
-  }, []);
-  
-  // Create the scrolling text content
-  const tickerContent = useMemo(() => {
-    if (newsItems.length === 0) return null;
-    
-    return newsItems.map((item, index) => (
-      <span key={item.id} className="inline-flex items-center whitespace-nowrap">
-        {index > 0 && (
-          <span className="mx-4 text-muted-foreground/30">│</span>
-        )}
-        <span className={`inline-flex items-center gap-1.5 ${NEWS_CATEGORIES[item.category].color}`}>
-          <span className="text-sm">{item.icon}</span>
-          {item.priority === 'urgent' && (
-            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded animate-pulse">
-              BREAKING
-            </span>
-          )}
-          <span className={`font-medium ${item.priority === 'urgent' ? 'text-red-400' : ''}`}>
-            {item.headline}
-          </span>
-        </span>
-      </span>
-    ));
-  }, [newsItems]);
-  
-  if (newsItems.length === 0) return null;
-  
-  return (
-    <div 
-      className="h-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-t border-slate-700/50 flex items-center overflow-hidden relative"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-    >
-      {/* Channel branding */}
-      <div className="flex-shrink-0 h-full px-3 bg-gradient-to-r from-red-600 to-red-700 flex items-center gap-2 z-10 shadow-lg">
-        <span className="text-white font-bold text-xs tracking-wider">ISOCITY NEWS</span>
-        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-      </div>
-      
-      {/* Ticker content with animation */}
-      <div className="flex-1 overflow-hidden relative">
-        <div 
-          className={`inline-flex items-center whitespace-nowrap ${isPaused ? '' : 'animate-ticker'}`}
-          style={{
-            animationDuration: `${Math.max(30, newsItems.length * 8)}s`,
-            animationPlayState: isPaused ? 'paused' : 'running',
-          }}
-        >
-          {/* Duplicate content for seamless loop */}
-          <div className="inline-flex items-center px-4">
-            {tickerContent}
-          </div>
-          <div className="inline-flex items-center px-4">
-            {tickerContent}
-          </div>
-        </div>
-      </div>
-      
-      {/* Live indicator */}
-      <div className="flex-shrink-0 px-3 flex items-center gap-1.5 bg-slate-900/80">
-        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-        <span className="text-[10px] font-medium text-red-400 tracking-wide">LIVE</span>
-      </div>
-      
-      {/* Gradient overlays for smooth edges */}
-      <div className="absolute left-[120px] top-0 bottom-0 w-8 bg-gradient-to-r from-slate-900 to-transparent pointer-events-none z-[1]"></div>
-      <div className="absolute right-[60px] top-0 bottom-0 w-8 bg-gradient-to-l from-slate-900 to-transparent pointer-events-none z-[1]"></div>
-    </div>
-  );
-});
 
 // Memoized TopBar Component
 const TopBar = React.memo(function TopBar() {
@@ -4960,6 +4526,34 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     }
   }, [offset, gridSize, selectedTool, placeAtTile, zoom, showsDragGrid, supportsDragPlace, setSelectedTile, findBuildingOrigin]);
   
+  // Calculate camera bounds based on grid size
+  const getMapBounds = useCallback((currentZoom: number, canvasW: number, canvasH: number) => {
+    const n = gridSize;
+    const padding = 100; // Allow some over-scroll
+    
+    // Map bounds in world coordinates
+    const mapLeft = -(n - 1) * TILE_WIDTH / 2;
+    const mapRight = (n - 1) * TILE_WIDTH / 2;
+    const mapTop = 0;
+    const mapBottom = (n - 1) * TILE_HEIGHT;
+    
+    const minOffsetX = padding - mapRight * currentZoom;
+    const maxOffsetX = canvasW - padding - mapLeft * currentZoom;
+    const minOffsetY = padding - mapBottom * currentZoom;
+    const maxOffsetY = canvasH - padding - mapTop * currentZoom;
+    
+    return { minOffsetX, maxOffsetX, minOffsetY, maxOffsetY };
+  }, [gridSize]);
+  
+  // Clamp offset to keep camera within reasonable bounds
+  const clampOffset = useCallback((newOffset: { x: number; y: number }, currentZoom: number) => {
+    const bounds = getMapBounds(currentZoom, canvasSize.width, canvasSize.height);
+    return {
+      x: Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, newOffset.x)),
+      y: Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, newOffset.y)),
+    };
+  }, [getMapBounds, canvasSize.width, canvasSize.height]);
+  
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning) {
       const newOffset = {
@@ -5084,67 +4678,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       setHoveredTile(null);
     }
   }, [isDragging, gridSize, showsDragGrid, supportsDragPlace, dragStartTile, placeAtTile, selectedTool, dragEndTile, adjacentCities]);
-  
-  // Calculate camera bounds based on grid size
-  const getMapBounds = useCallback((currentZoom: number, canvasW: number, canvasH: number) => {
-    // Map extends from grid (0,0) to (gridSize-1, gridSize-1)
-    // In isometric world coordinates (without offset):
-    // - Top: grid (0,0) → world (0, 0)
-    // - Bottom: grid (n-1, n-1) → world (0, (2n-2) * TILE_HEIGHT/2)
-    // - Left: grid (0, n-1) → world (-(n-1) * TILE_WIDTH/2, ...)
-    // - Right: grid (n-1, 0) → world ((n-1) * TILE_WIDTH/2, ...)
-    const n = gridSize;
-    const mapWidth = (n - 1) * TILE_WIDTH; // Total width of map
-    const mapHeight = (n - 1) * TILE_HEIGHT; // Total height of map
-    
-    // Padding to allow some over-scroll (in screen pixels)
-    const padding = 100;
-    
-    // View dimensions
-    const viewWidth = canvasW / currentZoom;
-    const viewHeight = canvasH / currentZoom;
-    
-    // Offset represents where the world origin appears in screen space
-    // To see the right edge of the map at the left of the screen:
-    //   offset.x = padding (a little past the left edge)
-    // To see the left edge of the map at the right of the screen:
-    //   mapLeftX * zoom + offset.x = canvasW - padding
-    //   offset.x = canvasW - padding - mapLeftX * zoom
-    
-    // Map left edge in world coords: -(n-1) * TILE_WIDTH / 2
-    // Map right edge in world coords: (n-1) * TILE_WIDTH / 2
-    // Map top edge in world coords: 0
-    // Map bottom edge in world coords: (n-1) * TILE_HEIGHT (approximately)
-    
-    const mapLeft = -(n - 1) * TILE_WIDTH / 2;
-    const mapRight = (n - 1) * TILE_WIDTH / 2;
-    const mapTop = 0;
-    const mapBottom = (n - 1) * TILE_HEIGHT;
-    
-    // For offset.x:
-    // - Minimum: when map's right edge is at screen's left edge (plus padding)
-    //   mapRight * zoom + offset.x = padding → offset.x = padding - mapRight * zoom
-    // - Maximum: when map's left edge is at screen's right edge (minus padding)
-    //   mapLeft * zoom + offset.x = canvasW - padding → offset.x = canvasW - padding - mapLeft * zoom
-    
-    const minOffsetX = padding - mapRight * currentZoom;
-    const maxOffsetX = canvasW - padding - mapLeft * currentZoom;
-    
-    // For offset.y:
-    const minOffsetY = padding - mapBottom * currentZoom;
-    const maxOffsetY = canvasH - padding - mapTop * currentZoom;
-    
-    return { minOffsetX, maxOffsetX, minOffsetY, maxOffsetY };
-  }, [gridSize]);
-  
-  // Clamp offset to keep camera within reasonable bounds
-  const clampOffset = useCallback((newOffset: { x: number; y: number }, currentZoom: number) => {
-    const bounds = getMapBounds(currentZoom, canvasSize.width, canvasSize.height);
-    return {
-      x: Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, newOffset.x)),
-      y: Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, newOffset.y)),
-    };
-  }, [getMapBounds, canvasSize.width, canvasSize.height]);
   
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();

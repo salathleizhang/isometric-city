@@ -93,6 +93,7 @@ const SPRITE_PACK_RED: SpritePack = {
     space_program: -0.15,
     industrial: 0.5, // Shift factories down about half a tile
     factory_large: -0.25, // Shift factory_large up 0.75 tiles (0.5 - 0.75 = -0.25)
+    house_medium: 0.25, // Shift down 1/4 tile
   },
   horizontalOffsets: {
     university: 0.3,
