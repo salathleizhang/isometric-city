@@ -145,9 +145,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const { state, placeAtTile, connectToCity, checkAndDiscoverCities, currentSpritePack, visualHour } = useGame();
   const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverCanvasRef = useRef<HTMLCanvasElement>(null); // PERF: Separate canvas for hover/selection highlights
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderPendingRef = useRef<number | null>(null); // PERF: Track pending render frame
   const [offset, setOffset] = useState({ x: isMobile ? 200 : 620, y: isMobile ? 100 : 160 });
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -1545,6 +1547,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Set display size
         canvasRef.current.style.width = `${rect.width}px`;
         canvasRef.current.style.height = `${rect.height}px`;
+        if (hoverCanvasRef.current) {
+          hoverCanvasRef.current.style.width = `${rect.width}px`;
+          hoverCanvasRef.current.style.height = `${rect.height}px`;
+        }
         if (carsCanvasRef.current) {
           carsCanvasRef.current.style.width = `${rect.width}px`;
           carsCanvasRef.current.style.height = `${rect.height}px`;
@@ -1566,7 +1572,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     return () => window.removeEventListener('resize', updateSize);
   }, []);
   
-  // Main render function
+  // Main render function - PERF: Uses requestAnimationFrame throttling to batch multiple state updates
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imagesLoaded) return;
@@ -1574,23 +1580,32 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const dpr = window.devicePixelRatio || 1;
+    // PERF: Cancel any pending render to avoid duplicate work
+    if (renderPendingRef.current !== null) {
+      cancelAnimationFrame(renderPendingRef.current);
+    }
     
-    // Disable image smoothing for crisp pixel art
-    ctx.imageSmoothingEnabled = false;
+    // PERF: Defer render to next animation frame - batches multiple state updates into one render
+    renderPendingRef.current = requestAnimationFrame(() => {
+      renderPendingRef.current = null;
+      
+      const dpr = window.devicePixelRatio || 1;
     
-    // Clear canvas with gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#0f1419');
-    gradient.addColorStop(0.5, '#141c24');
-    gradient.addColorStop(1, '#1a2a1f');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Disable image smoothing for crisp pixel art
+      ctx.imageSmoothingEnabled = false;
     
-    ctx.save();
-    // Scale for device pixel ratio first, then apply zoom
-    ctx.scale(dpr * zoom, dpr * zoom);
-    ctx.translate(offset.x / zoom, offset.y / zoom);
+      // Clear canvas with gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#0f1419');
+      gradient.addColorStop(0.5, '#141c24');
+      gradient.addColorStop(1, '#1a2a1f');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+      ctx.save();
+      // Scale for device pixel ratio first, then apply zoom
+      ctx.scale(dpr * zoom, dpr * zoom);
+      ctx.translate(offset.x / zoom, offset.y / zoom);
     
     // Calculate visible tile range for culling (account for DPR in canvas size)
     const viewWidth = canvas.width / (dpr * zoom);
@@ -1599,6 +1614,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const viewTop = -offset.y / zoom - TILE_HEIGHT * 2;
     const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH;
     const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 2;
+    
+    // PERF: Pre-compute visible diagonal range to skip entire rows of tiles
+    // In isometric rendering, screenY = (x + y) * (TILE_HEIGHT / 2), so sum = x + y = screenY * 2 / TILE_HEIGHT
+    // Add padding for tall buildings that may extend above their tile position
+    const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
+    const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
     
     type BuildingDraw = {
       screenX: number;
@@ -3104,7 +3125,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     // Draw tiles in isometric order (back to front)
-    for (let sum = 0; sum < gridSize * 2 - 1; sum++) {
+    // PERF: Only iterate through diagonal bands that intersect the visible viewport
+    for (let sum = visibleMinSum; sum <= visibleMaxSum; sum++) {
       for (let x = Math.max(0, sum - gridSize + 1); x <= Math.min(sum, gridSize - 1); x++) {
         const y = sum - x;
         if (y < 0 || y >= gridSize) continue;
@@ -3118,24 +3140,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
         
         const tile = grid[y][x];
-        const isHovered = hoveredTile?.x === x && hoveredTile?.y === y;
         
-        // Check if this tile is selected or part of a selected multi-tile building
-        let isSelected = selectedTile?.x === x && selectedTile?.y === y;
-        if (!isSelected && selectedTile) {
-          // Check if selected tile is a multi-tile building that includes this tile
-          const selectedOrigin = grid[selectedTile.y]?.[selectedTile.x];
-          if (selectedOrigin) {
-            const selectedSize = getBuildingSize(selectedOrigin.building.type);
-            if (selectedSize.width > 1 || selectedSize.height > 1) {
-              // Check if current tile is within the selected building's footprint
-              if (x >= selectedTile.x && x < selectedTile.x + selectedSize.width &&
-                  y >= selectedTile.y && y < selectedTile.y + selectedSize.height) {
-                isSelected = true;
-              }
-            }
-          }
-        }
+        // PERF: Hover and selection highlights are now rendered on a separate canvas layer
+        // Only keep drag rect and subway station highlights in main render (these change infrequently)
         
         // Check if tile is in drag selection rectangle (only show for zoning tools)
         const isInDragRect = showsDragGrid && dragStartTile && dragEndTile && 
@@ -3153,7 +3160,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Draw base tile for all tiles (including water), but skip gray bases for buildings and green bases for grass/empty adjacent to water or parks
         // Highlight subway stations when subway overlay is active
         const isSubwayStationHighlight = overlayMode === 'subway' && tile.building.type === 'subway_station';
-        drawIsometricTile(ctx, screenX, screenY, tile, !!(isHovered || isSelected || isInDragRect || isSubwayStationHighlight), zoom, true, needsGreenBaseOverWater || needsGreenBaseForPark);
+        drawIsometricTile(ctx, screenX, screenY, tile, !!(isInDragRect || isSubwayStationHighlight), zoom, true, needsGreenBaseOverWater || needsGreenBaseForPark);
         
         if (needsGreyBase) {
           baseTileQueue.push({ screenX, screenY, tile, depth: x + y });
@@ -3352,7 +3359,86 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, imageLoadVersion, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, getTileMetadata, showsDragGrid]);
+    }); // End requestAnimationFrame callback
+    
+    // PERF: Cleanup - cancel pending render on unmount or deps change
+    return () => {
+      if (renderPendingRef.current !== null) {
+        cancelAnimationFrame(renderPendingRef.current);
+        renderPendingRef.current = null;
+      }
+    };
+  // PERF: hoveredTile and selectedTile removed from deps - now rendered on separate hover canvas layer
+  }, [grid, gridSize, offset, zoom, overlayMode, imagesLoaded, imageLoadVersion, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, getTileMetadata, showsDragGrid]);
+  
+  // PERF: Lightweight hover/selection overlay - renders ONLY tile highlights
+  // This runs frequently (on mouse move) but is extremely fast since it only draws simple shapes
+  useEffect(() => {
+    const canvas = hoverCanvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Clear the hover canvas
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Apply transform (same as main canvas)
+    ctx.scale(dpr, dpr);
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(zoom, zoom);
+    
+    // Helper to draw highlight diamond
+    const drawHighlight = (screenX: number, screenY: number, color: string = 'rgba(255, 255, 255, 0.25)', strokeColor: string = '#ffffff') => {
+      const w = TILE_WIDTH;
+      const h = TILE_HEIGHT;
+      
+      // Draw semi-transparent fill
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(screenX + w / 2, screenY);
+      ctx.lineTo(screenX + w, screenY + h / 2);
+      ctx.lineTo(screenX + w / 2, screenY + h);
+      ctx.lineTo(screenX, screenY + h / 2);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw border
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    };
+    
+    // Draw hovered tile highlight
+    if (hoveredTile && hoveredTile.x >= 0 && hoveredTile.x < gridSize && hoveredTile.y >= 0 && hoveredTile.y < gridSize) {
+      const { screenX, screenY } = gridToScreen(hoveredTile.x, hoveredTile.y, 0, 0);
+      drawHighlight(screenX, screenY);
+    }
+    
+    // Draw selected tile highlight (including multi-tile buildings)
+    if (selectedTile && selectedTile.x >= 0 && selectedTile.x < gridSize && selectedTile.y >= 0 && selectedTile.y < gridSize) {
+      const selectedOrigin = grid[selectedTile.y]?.[selectedTile.x];
+      if (selectedOrigin) {
+        const selectedSize = getBuildingSize(selectedOrigin.building.type);
+        // Draw highlight for each tile in the building footprint
+        for (let dx = 0; dx < selectedSize.width; dx++) {
+          for (let dy = 0; dy < selectedSize.height; dy++) {
+            const tx = selectedTile.x + dx;
+            const ty = selectedTile.y + dy;
+            if (tx >= 0 && tx < gridSize && ty >= 0 && ty < gridSize) {
+              const { screenX, screenY } = gridToScreen(tx, ty, 0, 0);
+              drawHighlight(screenX, screenY, 'rgba(100, 200, 255, 0.3)', '#60a5fa');
+            }
+          }
+        }
+      }
+    }
+    
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [hoveredTile, selectedTile, offset, zoom, gridSize, grid]);
   
   // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
@@ -3468,6 +3554,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 4;
     
+    // PERF: Pre-compute visible diagonal range to skip entire rows of tiles
+    // In isometric rendering, screenY = (x + y) * (TILE_HEIGHT / 2), so sum = x + y = screenY * 2 / TILE_HEIGHT
+    // Add padding for tall buildings that may extend above their tile position
+    const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
+    const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
+    
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
       screenY: (gx + gy) * TILE_HEIGHT / 2,
@@ -3490,12 +3582,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const lightCutouts: Array<{x: number, y: number, type: 'road' | 'building', buildingType?: string, seed?: number}> = [];
     const coloredGlows: Array<{x: number, y: number, type: string}> = [];
     
-    // Single pass through all tiles to collect light sources (viewport culling inside)
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
+    // PERF: Only iterate through diagonal bands that intersect the visible viewport
+    // This skips entire rows of tiles that can't possibly be visible, significantly reducing iterations
+    for (let sum = visibleMinSum; sum <= visibleMaxSum; sum++) {
+      for (let x = Math.max(0, sum - gridSize + 1); x <= Math.min(sum, gridSize - 1); x++) {
+        const y = sum - x;
+        if (y < 0 || y >= gridSize) continue;
+        
         const { screenX, screenY } = gridToScreen(x, y);
         
-        // Viewport culling
+        // Viewport culling for horizontal bounds
         if (screenX + TILE_WIDTH < viewLeft || screenX > viewRight ||
             screenY + TILE_HEIGHT * 3 < viewTop || screenY > viewBottom) {
           continue;
@@ -4078,6 +4174,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         width={canvasSize.width}
         height={canvasSize.height}
         className="absolute top-0 left-0"
+      />
+      {/* PERF: Separate canvas for hover/selection highlights - avoids full redraw on mouse move */}
+      <canvas
+        ref={hoverCanvasRef}
+        width={canvasSize.width}
+        height={canvasSize.height}
+        className="absolute top-0 left-0 pointer-events-none"
       />
       <canvas
         ref={carsCanvasRef}

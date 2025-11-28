@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { SpriteTestPanel } from './SpriteTestPanel';
 
 export function SettingsPanel() {
-  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode } = useGame();
+  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, generateRandomCity, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode } = useGame();
   const { disastersEnabled, cityName, gridSize } = state;
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -330,6 +330,16 @@ export function SettingsPanel() {
               }}
             >
               Load Example State 6
+            </Button>
+            <Button
+              variant="default"
+              className="w-full mt-4"
+              onClick={() => {
+                generateRandomCity();
+                setActivePanel('none');
+              }}
+            >
+              Generate Random City
             </Button>
             
             <div className="mt-4 pt-4 border-t border-border">

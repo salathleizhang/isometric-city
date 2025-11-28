@@ -13,10 +13,12 @@ import {
 import {
   bulldozeTile,
   createInitialGameState,
+  DEFAULT_GRID_SIZE,
   placeBuilding,
   placeSubway,
   simulateTick,
   checkForDiscoverableCities,
+  generateRandomAdvancedCity,
 } from '@/lib/simulation';
 import {
   SPRITE_PACKS,
@@ -47,6 +49,7 @@ type GameContextValue = {
   newGame: (name?: string, size?: number) => void;
   loadState: (stateString: string) => boolean;
   exportState: () => string;
+  generateRandomCity: () => void;
   hasExistingGame: boolean;
   isSaving: boolean;
   addMoney: (amount: number) => void;
@@ -295,7 +298,7 @@ function saveDayNightMode(mode: DayNightMode): void {
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   // Start with a default state, we'll load from localStorage after mount
-  const [state, setState] = useState<GameState>(() => createInitialGameState(60, 'IsoCity'));
+  const [state, setState] = useState<GameState>(() => createInitialGameState(DEFAULT_GRID_SIZE, 'IsoCity'));
   
   const [hasExistingGame, setHasExistingGame] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -658,7 +661,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const newGame = useCallback((name?: string, size?: number) => {
     clearGameState(); // Clear saved state when starting fresh
-    const fresh = createInitialGameState(size ?? 60, name || 'IsoCity');
+    const fresh = createInitialGameState(size ?? DEFAULT_GRID_SIZE, name || 'IsoCity');
     setState(fresh);
   }, []);
 
@@ -719,6 +722,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return JSON.stringify(state);
   }, [state]);
 
+  const generateRandomCity = useCallback(() => {
+    clearGameState(); // Clear saved state when generating a new city
+    const randomCity = generateRandomAdvancedCity(DEFAULT_GRID_SIZE);
+    setState(randomCity);
+  }, []);
+
   const addMoney = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -767,6 +776,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     newGame,
     loadState,
     exportState,
+    generateRandomCity,
     hasExistingGame,
     isSaving,
     addMoney,

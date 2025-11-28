@@ -20,6 +20,10 @@ import {
   INDUSTRIAL_BUILDINGS,
 } from '@/types/game';
 import { generateCityName, generateWaterName } from './names';
+import { isMobile } from 'react-device-detect';
+
+// Default grid size for new games
+export const DEFAULT_GRID_SIZE = isMobile ? 50 : 70;
 
 // Check if a factory_small at this position would render as a farm
 // This matches the deterministic logic in Game.tsx for farm variant selection
@@ -776,7 +780,7 @@ function createServiceCoverage(size: number): ServiceCoverage {
 }
 
 
-export function createInitialGameState(size: number = 60, cityName: string = 'New City'): GameState {
+export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityName: string = 'New City'): GameState {
   const { grid, waterBodies } = generateTerrain(size);
   const adjacentCities = generateAdjacentCities();
 
@@ -2419,6 +2423,366 @@ export function removeSubway(state: GameState, x: number, y: number): GameState 
   newGrid[y][x].hasSubway = false;
 
   return { ...state, grid: newGrid };
+}
+
+// Generate a random advanced city state with developed zones, infrastructure, and buildings
+export function generateRandomAdvancedCity(size: number = DEFAULT_GRID_SIZE, cityName: string = 'Metropolis'): GameState {
+  // Start with a base state (terrain generation)
+  const baseState = createInitialGameState(size, cityName);
+  const grid = baseState.grid;
+  
+  // Helper to check if a region is clear (no water)
+  const isRegionClear = (x: number, y: number, w: number, h: number): boolean => {
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const tile = grid[y + dy]?.[x + dx];
+        if (!tile || tile.building.type === 'water') return false;
+      }
+    }
+    return true;
+  };
+  
+  // Helper to place a road
+  const placeRoad = (x: number, y: number): void => {
+    const tile = grid[y]?.[x];
+    if (tile && tile.building.type !== 'water') {
+      tile.building = createAdvancedBuilding('road');
+      tile.zone = 'none';
+    }
+  };
+  
+  // Helper to create a completed building
+  function createAdvancedBuilding(type: BuildingType): Building {
+    return {
+      type,
+      level: type === 'grass' || type === 'empty' || type === 'water' || type === 'road' ? 0 : Math.floor(Math.random() * 3) + 3,
+      population: 0,
+      jobs: 0,
+      powered: true,
+      watered: true,
+      onFire: false,
+      fireProgress: 0,
+      age: Math.floor(Math.random() * 100) + 50,
+      constructionProgress: 100, // Fully built
+      abandoned: false,
+    };
+  }
+  
+  // Helper to place a zone with developed building
+  const placeZonedBuilding = (x: number, y: number, zone: ZoneType, buildingType: BuildingType): void => {
+    const tile = grid[y]?.[x];
+    if (tile && tile.building.type !== 'water' && tile.building.type !== 'road') {
+      tile.zone = zone;
+      tile.building = createAdvancedBuilding(buildingType);
+      tile.building.level = Math.floor(Math.random() * 3) + 3;
+      const stats = BUILDING_STATS[buildingType];
+      if (stats) {
+        tile.building.population = Math.floor(stats.maxPop * tile.building.level * 0.7);
+        tile.building.jobs = Math.floor(stats.maxJobs * tile.building.level * 0.7);
+      }
+    }
+  };
+  
+  // Helper to place a multi-tile building
+  const placeMultiTileBuilding = (x: number, y: number, type: BuildingType, zone: ZoneType = 'none'): boolean => {
+    const buildingSize = getBuildingSize(type);
+    if (!isRegionClear(x, y, buildingSize.width, buildingSize.height)) return false;
+    if (x + buildingSize.width > size || y + buildingSize.height > size) return false;
+    
+    // Check for roads in the way
+    for (let dy = 0; dy < buildingSize.height; dy++) {
+      for (let dx = 0; dx < buildingSize.width; dx++) {
+        if (grid[y + dy][x + dx].building.type === 'road') return false;
+      }
+    }
+    
+    // Place the building
+    for (let dy = 0; dy < buildingSize.height; dy++) {
+      for (let dx = 0; dx < buildingSize.width; dx++) {
+        const tile = grid[y + dy][x + dx];
+        tile.zone = zone;
+        if (dx === 0 && dy === 0) {
+          tile.building = createAdvancedBuilding(type);
+          const stats = BUILDING_STATS[type];
+          if (stats) {
+            tile.building.population = Math.floor(stats.maxPop * tile.building.level * 0.8);
+            tile.building.jobs = Math.floor(stats.maxJobs * tile.building.level * 0.8);
+          }
+        } else {
+          tile.building = createAdvancedBuilding('empty');
+          tile.building.level = 0;
+        }
+      }
+    }
+    return true;
+  };
+  
+  // Define city center (roughly middle of map, avoiding edges)
+  const centerX = Math.floor(size / 2);
+  const centerY = Math.floor(size / 2);
+  const cityRadius = Math.floor(size * 0.35);
+  
+  // Create main road grid - major arteries
+  const roadSpacing = 6 + Math.floor(Math.random() * 3); // 6-8 tile spacing
+  
+  // Main horizontal roads
+  for (let roadY = centerY - cityRadius; roadY <= centerY + cityRadius; roadY += roadSpacing) {
+    if (roadY < 2 || roadY >= size - 2) continue;
+    for (let x = Math.max(2, centerX - cityRadius); x <= Math.min(size - 3, centerX + cityRadius); x++) {
+      placeRoad(x, roadY);
+    }
+  }
+  
+  // Main vertical roads
+  for (let roadX = centerX - cityRadius; roadX <= centerX + cityRadius; roadX += roadSpacing) {
+    if (roadX < 2 || roadX >= size - 2) continue;
+    for (let y = Math.max(2, centerY - cityRadius); y <= Math.min(size - 3, centerY + cityRadius); y++) {
+      placeRoad(roadX, y);
+    }
+  }
+  
+  // Add some diagonal/curved roads for interest (ring road)
+  const ringRadius = cityRadius - 5;
+  for (let angle = 0; angle < Math.PI * 2; angle += 0.08) {
+    const rx = Math.round(centerX + Math.cos(angle) * ringRadius);
+    const ry = Math.round(centerY + Math.sin(angle) * ringRadius);
+    if (rx >= 2 && rx < size - 2 && ry >= 2 && ry < size - 2) {
+      placeRoad(rx, ry);
+    }
+  }
+  
+  // Place service buildings first (they need good placement)
+  const serviceBuildings: Array<{ type: BuildingType; count: number }> = [
+    { type: 'power_plant', count: 4 + Math.floor(Math.random() * 3) },
+    { type: 'water_tower', count: 8 + Math.floor(Math.random() * 4) },
+    { type: 'police_station', count: 6 + Math.floor(Math.random() * 4) },
+    { type: 'fire_station', count: 6 + Math.floor(Math.random() * 4) },
+    { type: 'hospital', count: 3 + Math.floor(Math.random() * 2) },
+    { type: 'school', count: 5 + Math.floor(Math.random() * 3) },
+    { type: 'university', count: 2 + Math.floor(Math.random() * 2) },
+  ];
+  
+  for (const service of serviceBuildings) {
+    let placed = 0;
+    let attempts = 0;
+    while (placed < service.count && attempts < 500) {
+      const x = centerX - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      const y = centerY - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      if (placeMultiTileBuilding(x, y, service.type)) {
+        placed++;
+      }
+      attempts++;
+    }
+  }
+  
+  // Place special/landmark buildings
+  const specialBuildings: BuildingType[] = [
+    'city_hall', 'stadium', 'museum', 'airport', 'space_program', 'amusement_park',
+    'baseball_stadium', 'amphitheater', 'community_center'
+  ];
+  
+  for (const building of specialBuildings) {
+    let attempts = 0;
+    while (attempts < 200) {
+      const x = centerX - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      const y = centerY - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      if (placeMultiTileBuilding(x, y, building)) break;
+      attempts++;
+    }
+  }
+  
+  // Place parks and recreation throughout
+  const parkBuildings: BuildingType[] = [
+    'park', 'park_large', 'tennis', 'basketball_courts', 'playground_small', 
+    'playground_large', 'swimming_pool', 'skate_park', 'community_garden', 'pond_park'
+  ];
+  
+  for (let i = 0; i < 25 + Math.floor(Math.random() * 15); i++) {
+    const parkType = parkBuildings[Math.floor(Math.random() * parkBuildings.length)];
+    let attempts = 0;
+    while (attempts < 100) {
+      const x = centerX - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      const y = centerY - cityRadius + Math.floor(Math.random() * cityRadius * 2);
+      if (placeMultiTileBuilding(x, y, parkType)) break;
+      attempts++;
+    }
+  }
+  
+  // Zone and develop remaining grass tiles within city radius
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const tile = grid[y][x];
+      if (tile.building.type !== 'grass' && tile.building.type !== 'tree') continue;
+      
+      // Check distance from center
+      const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+      if (dist > cityRadius) continue;
+      
+      // Skip tiles not near roads
+      let nearRoad = false;
+      for (let dy = -2; dy <= 2 && !nearRoad; dy++) {
+        for (let dx = -2; dx <= 2 && !nearRoad; dx++) {
+          const checkTile = grid[y + dy]?.[x + dx];
+          if (checkTile?.building.type === 'road') nearRoad = true;
+        }
+      }
+      if (!nearRoad) continue;
+      
+      // Determine zone based on distance from center and some randomness
+      const normalizedDist = dist / cityRadius;
+      let zone: ZoneType;
+      let buildingType: BuildingType;
+      
+      const rand = Math.random();
+      
+      if (normalizedDist < 0.3) {
+        // Downtown - mostly commercial with some high-density residential
+        if (rand < 0.6) {
+          zone = 'commercial';
+          const commercialTypes: BuildingType[] = ['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'];
+          buildingType = commercialTypes[Math.floor(Math.random() * commercialTypes.length)];
+        } else {
+          zone = 'residential';
+          const residentialTypes: BuildingType[] = ['apartment_low', 'apartment_high'];
+          buildingType = residentialTypes[Math.floor(Math.random() * residentialTypes.length)];
+        }
+      } else if (normalizedDist < 0.6) {
+        // Mid-city - mixed use
+        if (rand < 0.5) {
+          zone = 'residential';
+          const residentialTypes: BuildingType[] = ['house_medium', 'mansion', 'apartment_low'];
+          buildingType = residentialTypes[Math.floor(Math.random() * residentialTypes.length)];
+        } else if (rand < 0.8) {
+          zone = 'commercial';
+          const commercialTypes: BuildingType[] = ['shop_small', 'shop_medium', 'office_low'];
+          buildingType = commercialTypes[Math.floor(Math.random() * commercialTypes.length)];
+        } else {
+          zone = 'industrial';
+          buildingType = 'factory_small';
+        }
+      } else {
+        // Outer areas - more residential and industrial
+        if (rand < 0.5) {
+          zone = 'residential';
+          const residentialTypes: BuildingType[] = ['house_small', 'house_medium'];
+          buildingType = residentialTypes[Math.floor(Math.random() * residentialTypes.length)];
+        } else if (rand < 0.7) {
+          zone = 'industrial';
+          const industrialTypes: BuildingType[] = ['factory_small', 'factory_medium', 'warehouse'];
+          buildingType = industrialTypes[Math.floor(Math.random() * industrialTypes.length)];
+        } else {
+          zone = 'commercial';
+          buildingType = 'shop_small';
+        }
+      }
+      
+      // Handle multi-tile buildings
+      const bSize = getBuildingSize(buildingType);
+      if (bSize.width > 1 || bSize.height > 1) {
+        placeMultiTileBuilding(x, y, buildingType, zone);
+      } else {
+        placeZonedBuilding(x, y, zone, buildingType);
+      }
+    }
+  }
+  
+  // Add some trees in remaining grass areas
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const tile = grid[y][x];
+      if (tile.building.type === 'grass' && Math.random() < 0.15) {
+        tile.building = createAdvancedBuilding('tree');
+      }
+    }
+  }
+  
+  // Add subway network in the city center
+  for (let y = centerY - Math.floor(cityRadius * 0.6); y <= centerY + Math.floor(cityRadius * 0.6); y++) {
+    for (let x = centerX - Math.floor(cityRadius * 0.6); x <= centerX + Math.floor(cityRadius * 0.6); x++) {
+      const tile = grid[y]?.[x];
+      if (tile && tile.building.type !== 'water') {
+        // Place subway along main roads
+        const onMainRoad = (x % roadSpacing === centerX % roadSpacing) || (y % roadSpacing === centerY % roadSpacing);
+        if (onMainRoad && Math.random() < 0.7) {
+          tile.hasSubway = true;
+        }
+      }
+    }
+  }
+  
+  // Place subway stations at key intersections
+  const subwayStationSpacing = roadSpacing * 2;
+  for (let y = centerY - cityRadius; y <= centerY + cityRadius; y += subwayStationSpacing) {
+    for (let x = centerX - cityRadius; x <= centerX + cityRadius; x += subwayStationSpacing) {
+      const tile = grid[y]?.[x];
+      if (tile && tile.building.type === 'grass' && tile.zone === 'none') {
+        tile.building = createAdvancedBuilding('subway_station');
+        tile.hasSubway = true;
+      }
+    }
+  }
+  
+  // Calculate services and stats
+  const services = calculateServiceCoverage(grid, size);
+  
+  // Set power and water for all buildings
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      grid[y][x].building.powered = services.power[y][x];
+      grid[y][x].building.watered = services.water[y][x];
+    }
+  }
+  
+  // Calculate initial stats
+  let totalPopulation = 0;
+  let totalJobs = 0;
+  
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const building = grid[y][x].building;
+      totalPopulation += building.population;
+      totalJobs += building.jobs;
+    }
+  }
+  
+  // Create the final state
+  return {
+    ...baseState,
+    grid,
+    cityName,
+    year: 2024 + Math.floor(Math.random() * 50), // Random year in future
+    month: Math.floor(Math.random() * 12) + 1,
+    day: Math.floor(Math.random() * 28) + 1,
+    hour: 12,
+    tick: 0,
+    speed: 1,
+    selectedTool: 'select',
+    taxRate: 7 + Math.floor(Math.random() * 4), // 7-10%
+    effectiveTaxRate: 8,
+    stats: {
+      population: totalPopulation,
+      jobs: totalJobs,
+      money: 500000 + Math.floor(Math.random() * 1000000),
+      income: Math.floor(totalPopulation * 0.8 + totalJobs * 0.4),
+      expenses: Math.floor((totalPopulation + totalJobs) * 0.3),
+      happiness: 65 + Math.floor(Math.random() * 20),
+      health: 60 + Math.floor(Math.random() * 25),
+      education: 55 + Math.floor(Math.random() * 30),
+      safety: 60 + Math.floor(Math.random() * 25),
+      environment: 50 + Math.floor(Math.random() * 30),
+      demand: {
+        residential: 20 + Math.floor(Math.random() * 40),
+        commercial: 15 + Math.floor(Math.random() * 35),
+        industrial: 10 + Math.floor(Math.random() * 30),
+      },
+    },
+    services,
+    notifications: [],
+    advisorMessages: [],
+    history: [],
+    activePanel: 'none',
+    disastersEnabled: true,
+  };
 }
 
 // Diagnostic function to explain why a zoned tile isn't developing a building

@@ -142,7 +142,7 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
   select: { name: 'Select', cost: 0, description: 'Click to view tile info' },
   bulldoze: { name: 'Bulldoze', cost: 10, description: 'Remove buildings and zones' },
   road: { name: 'Road', cost: 25, description: 'Connect your city' },
-  subway: { name: 'Subway', cost: 50, description: 'Underground transit (boosts commerce)' },
+  subway: { name: 'Subway', cost: 50, description: 'Underground transit' },
   tree: { name: 'Tree', cost: 15, description: 'Plant trees to improve environment' },
   zone_residential: { name: 'Residential', cost: 50, description: 'Zone for housing' },
   zone_commercial: { name: 'Commercial', cost: 50, description: 'Zone for shops and offices' },
