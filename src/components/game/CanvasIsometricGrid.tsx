@@ -3820,28 +3820,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // If it's full daylight, just clear and return (early exit)
     if (darkness <= 0.01) return;
     
-    // On mobile, use simplified lighting (just the overlay, skip individual lights)
-    // This significantly reduces CPU usage on mobile devices
-    if (isMobile && darkness > 0) {
-      const getAmbientColor = (h: number): { r: number; g: number; b: number } => {
-        if (h >= 7 && h < 18) return { r: 255, g: 255, b: 255 };
-        if (h >= 5 && h < 7) {
-          const t = (h - 5) / 2;
-          return { r: Math.round(60 + 40 * t), g: Math.round(40 + 30 * t), b: Math.round(70 + 20 * t) };
-        }
-        if (h >= 18 && h < 20) {
-          const t = (h - 18) / 2;
-          return { r: Math.round(100 - 40 * t), g: Math.round(70 - 30 * t), b: Math.round(90 - 20 * t) };
-        }
-        return { r: 20, g: 30, b: 60 };
-      };
-      const ambient = getAmbientColor(visualHour);
-      const alpha = darkness * 0.45; // Slightly less darkening on mobile
-      ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
-    
     // Get ambient color based on time
     const getAmbientColor = (h: number): { r: number; g: number; b: number } => {
       if (h >= 7 && h < 18) return { r: 255, g: 255, b: 255 };
@@ -3871,13 +3849,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 4;
     
-    // Calculate grid bounds to only iterate visible tiles
-    // Convert viewport bounds to approximate grid coordinates
-    const minGridY = Math.max(0, Math.floor((viewTop / TILE_HEIGHT) - gridSize / 2));
-    const maxGridY = Math.min(gridSize - 1, Math.ceil((viewBottom / TILE_HEIGHT) + gridSize / 2));
-    const minGridX = Math.max(0, Math.floor((viewLeft / TILE_WIDTH) + gridSize / 2));
-    const maxGridX = Math.min(gridSize - 1, Math.ceil((viewRight / TILE_WIDTH) + gridSize / 2));
-    
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
       screenY: (gx + gy) * TILE_HEIGHT / 2,
@@ -3900,9 +3871,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const lightCutouts: Array<{x: number, y: number, type: 'road' | 'building', buildingType?: string, seed?: number}> = [];
     const coloredGlows: Array<{x: number, y: number, type: string}> = [];
     
-    // Single pass through visible tiles to collect light sources
-    for (let y = minGridY; y <= maxGridY; y++) {
-      for (let x = minGridX; x <= maxGridX; x++) {
+    // Single pass through all tiles to collect light sources (viewport culling inside)
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
         const { screenX, screenY } = gridToScreen(x, y);
         
         // Viewport culling
