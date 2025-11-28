@@ -561,15 +561,19 @@ export function useVehicleSystems(
     
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
-    const baseMaxCars = 160;
-    const maxCars = Math.min(baseMaxCars, Math.max(16, Math.floor(currentGridSize * (2))));
+    const baseMaxCars = 200;
+    const maxCars = Math.min(baseMaxCars, Math.max(30, Math.floor(currentGridSize * 2.5)));
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
-      if (spawnRandomCar()) {
-        carSpawnTimerRef.current = 0.9 + Math.random() * 1.3;
-      } else {
-        carSpawnTimerRef.current = 0.5;
+      // Spawn multiple cars at once for faster population
+      const carsToSpawn = Math.min(5, maxCars - carsRef.current.length);
+      let spawnedCount = 0;
+      for (let i = 0; i < carsToSpawn; i++) {
+        if (spawnRandomCar()) {
+          spawnedCount++;
+        }
       }
+      carSpawnTimerRef.current = spawnedCount > 0 ? 0.1 + Math.random() * 0.2 : 0.05;
     }
     
     // Get current traffic light state
