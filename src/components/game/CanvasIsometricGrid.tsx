@@ -3554,6 +3554,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 4;
     
+    // PERF: Pre-compute visible diagonal range to skip entire rows of tiles
+    // In isometric rendering, screenY = (x + y) * (TILE_HEIGHT / 2), so sum = x + y = screenY * 2 / TILE_HEIGHT
+    // Add padding for tall buildings that may extend above their tile position
+    const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
+    const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
+    
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
       screenY: (gx + gy) * TILE_HEIGHT / 2,
@@ -3576,12 +3582,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const lightCutouts: Array<{x: number, y: number, type: 'road' | 'building', buildingType?: string, seed?: number}> = [];
     const coloredGlows: Array<{x: number, y: number, type: string}> = [];
     
-    // Single pass through all tiles to collect light sources (viewport culling inside)
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
+    // PERF: Only iterate through diagonal bands that intersect the visible viewport
+    // This skips entire rows of tiles that can't possibly be visible, significantly reducing iterations
+    for (let sum = visibleMinSum; sum <= visibleMaxSum; sum++) {
+      for (let x = Math.max(0, sum - gridSize + 1); x <= Math.min(sum, gridSize - 1); x++) {
+        const y = sum - x;
+        if (y < 0 || y >= gridSize) continue;
+        
         const { screenX, screenY } = gridToScreen(x, y);
         
-        // Viewport culling
+        // Viewport culling for horizontal bounds
         if (screenX + TILE_WIDTH < viewLeft || screenX > viewRight ||
             screenY + TILE_HEIGHT * 3 < viewTop || screenY > viewBottom) {
           continue;
