@@ -12,8 +12,8 @@ import { isEntityBehindBuilding } from './renderHelpers';
 import { getPedestrianOpacity, getVisiblePedestrians } from './pedestrianSystem';
 
 // LOD thresholds - draw simpler at lower zoom
-const LOD_SIMPLE_ZOOM = 0.7;  // Below this, draw very simple pedestrians
-const LOD_MEDIUM_ZOOM = 1.0;  // Below this, skip some details
+const LOD_SIMPLE_ZOOM = 0.55;  // Below this, draw very simple pedestrians (just above min zoom)
+const LOD_MEDIUM_ZOOM = 0.75;  // Below this, skip some details
 
 /**
  * Draw pedestrians with dynamic activities and states
