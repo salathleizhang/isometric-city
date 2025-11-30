@@ -168,9 +168,9 @@ export function MobileTopBar({
                 }`}
                 title="2x speed"
               >
-                <div className="flex items-center -space-x-[4px]">
-                  <PlayIcon size={9} />
-                  <PlayIcon size={9} />
+                <div className="flex items-center -space-x-[5px]">
+                  <PlayIcon size={12} />
+                  <PlayIcon size={12} />
                 </div>
               </button>
               <button
@@ -180,10 +180,10 @@ export function MobileTopBar({
                 }`}
                 title="3x speed"
               >
-                <div className="flex items-center -space-x-[5px]">
-                  <PlayIcon size={8} />
-                  <PlayIcon size={8} />
-                  <PlayIcon size={8} />
+                <div className="flex items-center -space-x-[7px]">
+                  <PlayIcon size={12} />
+                  <PlayIcon size={12} />
+                  <PlayIcon size={12} />
                 </div>
               </button>
             </div>

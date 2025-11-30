@@ -194,18 +194,18 @@ export const TopBar = React.memo(function TopBar() {
               className="h-7 w-7 p-0 m-0"
               title={s === 0 ? 'Pause' : s === 1 ? 'Normal' : s === 2 ? 'Fast' : 'Very Fast'}
             >
-              {s === 0 ? <PauseIcon size={14} /> : 
-               s === 1 ? <PlayIcon size={14} /> : 
+              {s === 0 ? <PauseIcon size={12} /> : 
+               s === 1 ? <PlayIcon size={12} /> : 
                s === 2 ? (
                  <div className="flex items-center -space-x-[5px]">
-                   <PlayIcon size={11} />
-                   <PlayIcon size={11} />
+                   <PlayIcon size={12} />
+                   <PlayIcon size={12} />
                  </div>
                ) :
-               <div className="flex items-center -space-x-[6px]">
-                 <PlayIcon size={10} />
-                 <PlayIcon size={10} />
-                 <PlayIcon size={10} />
+               <div className="flex items-center -space-x-[7px]">
+                 <PlayIcon size={12} />
+                 <PlayIcon size={12} />
+                 <PlayIcon size={12} />
                </div>}
             </Button>
           ))}
