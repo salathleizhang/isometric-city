@@ -158,18 +158,9 @@ export const StatsPanel = React.memo(function StatsPanel() {
 export const TopBar = React.memo(function TopBar() {
   const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
   const { stats, year, month, day, speed, taxRate, cityName } = state;
-  const [shareState, setShareState] = useState<'idle' | 'copied'>('idle');
   
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const formattedDate = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`;
-  
-  const handleShare = async () => {
-    const success = await copyShareUrl(state);
-    if (success) {
-      setShareState('copied');
-      setTimeout(() => setShareState('idle'), 2000);
-    }
-  };
   
   return (
     <div className="h-14 bg-card border-b border-border flex items-center justify-between px-4">
@@ -254,26 +245,6 @@ export const TopBar = React.memo(function TopBar() {
           />
           <span className="text-foreground text-xs font-mono tabular-nums w-8">{taxRate}%</span>
         </div>
-        
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={handleShare}
-              variant="ghost"
-              size="icon-sm"
-              className="h-7 w-7"
-            >
-              {shareState === 'copied' ? (
-                <CheckIcon size={14} className="text-green-500" />
-              ) : (
-                <ShareIcon size={14} />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{shareState === 'copied' ? 'Link copied!' : 'Share your city'}</p>
-          </TooltipContent>
-        </Tooltip>
       </div>
     </div>
   );

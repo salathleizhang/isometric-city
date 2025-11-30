@@ -69,134 +69,15 @@ function getCurrentCityName(): string {
   return 'your city';
 }
 
-// Component that loads shared state from URL
-function SharedStateLoader({ onLoaded, shouldSaveFirst }: { onLoaded: () => void; shouldSaveFirst: boolean }) {
-  const { loadState, saveCurrentCityForRestore } = useGame();
-  const hasLoaded = useRef(false);
-
-  useEffect(() => {
-    if (hasLoaded.current) return;
-    hasLoaded.current = true;
-
-    // Save current city first if requested
-    if (shouldSaveFirst) {
-      saveCurrentCityForRestore();
-    }
-
-    const compressed = getStateFromUrl();
-    if (compressed) {
-      const partialState = decompressGameState(compressed);
-      if (partialState) {
-        // Convert partial state to full JSON string for loadState
-        // We need to create a minimal valid state
-        const fullState = {
-          ...partialState,
-          tick: 0,
-          speed: 1,
-          selectedTool: 'select',
-          budget: {
-            police: { name: 'Police', funding: 100, cost: 0 },
-            fire: { name: 'Fire', funding: 100, cost: 0 },
-            health: { name: 'Health', funding: 100, cost: 0 },
-            education: { name: 'Education', funding: 100, cost: 0 },
-            transportation: { name: 'Transportation', funding: 100, cost: 0 },
-            parks: { name: 'Parks', funding: 100, cost: 0 },
-            power: { name: 'Power', funding: 100, cost: 0 },
-            water: { name: 'Water', funding: 100, cost: 0 },
-          },
-          services: {
-            police: [],
-            fire: [],
-            health: [],
-            education: [],
-            power: [],
-            water: [],
-          },
-          notifications: [],
-          advisorMessages: [],
-          history: [],
-          activePanel: 'none',
-          disastersEnabled: true,
-          waterBodies: [],
-        };
-        loadState(JSON.stringify(fullState));
-        // Clear the URL hash after loading
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-    }
-    onLoaded();
-  }, [loadState, saveCurrentCityForRestore, onLoaded, shouldSaveFirst]);
-
-  return null;
-}
-
-// Dialog for confirming shared city load
-function SaveCityDialog({ 
-  cityName, 
-  onSaveAndContinue, 
-  onDontSave, 
-  onCancel 
-}: { 
-  cityName: string;
-  onSaveAndContinue: () => void;
-  onDontSave: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Save current city?</DialogTitle>
-          <DialogDescription className="pt-2">
-            You&apos;re about to view a shared city. Would you like to save <strong className="text-foreground">{cityName}</strong> so you can restore it later?
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-2 pt-4 w-full">
-          <Button onClick={onSaveAndContinue} className="w-full flex-shrink-0">
-            Save & Continue
-          </Button>
-          <Button onClick={onDontSave} variant="outline" className="w-full flex-shrink-0">
-            Don&apos;t Save
-          </Button>
-          <Button onClick={onCancel} variant="ghost" className="w-full flex-shrink-0 text-muted-foreground">
-            Cancel
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function HomePage() {
   const [showGame, setShowGame] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [hasSharedState, setHasSharedState] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [shouldSaveBeforeLoad, setShouldSaveBeforeLoad] = useState(false);
-  const [currentCityName, setCurrentCityName] = useState('your city');
   const { isMobileDevice, isSmallScreen, orientation } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
 
-  // Check for saved game or shared state after mount (client-side only)
+  // Check for saved game after mount (client-side only)
   useEffect(() => {
     const checkSavedGame = () => {
-      // Check for shared state in URL first
-      const compressed = getStateFromUrl();
-      if (compressed) {
-        // If there's an existing game, ask if they want to save first
-        if (hasSavedGame()) {
-          setCurrentCityName(getCurrentCityName());
-          setShowSaveDialog(true);
-          setIsChecking(false);
-          return;
-        }
-        // No existing game, just load the shared state
-        setHasSharedState(true);
-        setShowGame(true);
-        setIsChecking(false);
-        return;
-      }
-      
       setIsChecking(false);
       if (hasSavedGame()) {
         setShowGame(true);
@@ -204,27 +85,6 @@ export default function HomePage() {
     };
     // Use requestAnimationFrame to avoid synchronous setState in effect
     requestAnimationFrame(checkSavedGame);
-  }, []);
-
-  const handleSaveAndContinue = useCallback(() => {
-    setShouldSaveBeforeLoad(true);
-    setHasSharedState(true);
-    setShowSaveDialog(false);
-    setShowGame(true);
-  }, []);
-
-  const handleDontSave = useCallback(() => {
-    setShouldSaveBeforeLoad(false);
-    setHasSharedState(true);
-    setShowSaveDialog(false);
-    setShowGame(true);
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    // Clear the URL hash and show the regular game
-    window.history.replaceState(null, '', window.location.pathname);
-    setShowSaveDialog(false);
-    setShowGame(true);
   }, []);
 
   if (isChecking) {
@@ -235,24 +95,9 @@ export default function HomePage() {
     );
   }
 
-  // Show save dialog before loading shared state
-  if (showSaveDialog) {
-    return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <SaveCityDialog
-          cityName={currentCityName}
-          onSaveAndContinue={handleSaveAndContinue}
-          onDontSave={handleDontSave}
-          onCancel={handleCancel}
-        />
-      </main>
-    );
-  }
-
   if (showGame) {
     return (
       <GameProvider>
-        {hasSharedState && <SharedStateLoader onLoaded={() => setHasSharedState(false)} shouldSaveFirst={shouldSaveBeforeLoad} />}
         <main className="h-screen w-screen overflow-hidden">
           <Game />
         </main>
