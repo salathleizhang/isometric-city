@@ -855,8 +855,10 @@ function scanForBridgeInDirection(
       if (waterTiles.length > MAX_BRIDGE_SPAN) {
         return null; // Too wide to bridge
       }
-    } else if (tile.building.type === 'road' || tile.building.type === 'bridge') {
-      // Found a road/bridge on the other side - valid bridge opportunity!
+    } else if (tile.building.type === 'road') {
+      // Found a ROAD on the other side - valid bridge opportunity!
+      // Note: We only connect to roads, NOT to bridges
+      // This prevents creating spurious bridges when placing roads near existing bridges
       if (waterTiles.length > 0) {
         const span = waterTiles.length;
         const bridgeType = getBridgeTypeForSpan(span);
@@ -872,6 +874,9 @@ function scanForBridgeInDirection(
           waterTiles,
         };
       }
+      return null;
+    } else if (tile.building.type === 'bridge') {
+      // Found a bridge - don't create another bridge connecting to it
       return null;
     } else {
       // Found land that's not a road - no bridge possible in this direction
@@ -895,8 +900,9 @@ function detectBridgeOpportunity(
   const tile = grid[y]?.[x];
   if (!tile) return null;
   
-  // Only check from road tiles
-  if (tile.building.type !== 'road' && tile.building.type !== 'bridge') {
+  // Only check from ROAD tiles, not bridges
+  // Bridges should only be created when dragging a road across water to another road
+  if (tile.building.type !== 'road') {
     return null;
   }
   
