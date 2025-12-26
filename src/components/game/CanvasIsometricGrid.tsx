@@ -1747,7 +1747,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // DRAW SUPPORT PILLARS FIRST (they go into the water)
       // ============================================================
       const pillarW = 4;
-      const pillarH = 14;
+      const pillarH = 22; // Extended further down into water
       const pillarInset = 0.22; // How far from edges to place pillars (moved inwards)
       
       ctx.fillStyle = style.support;
@@ -1904,8 +1904,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // For a 9-tile bridge: indices 0,1,2,3,4,5,6,7,8 - middle would be index 4
       // For a 10-tile bridge: indices 0-9 - middle would be index 4 or 5
       const middleIndex = Math.floor(bridgeSpan / 2);
-      const isMiddleTowerTile = position === 'middle' && bridgeType === 'suspension' && 
-        bridgeSpan > 6 && bridgeIndex === middleIndex;
+      // For bridges with span info: place at exact middle index
+      // For old bridges without span info (bridgeSpan defaults to 1): use grid-based fallback
+      const hasSpanInfo = building.bridgeSpan !== undefined && building.bridgeSpan > 1;
+      const isMiddleTowerTile = position === 'middle' && bridgeType === 'suspension' && (
+        (hasSpanInfo && bridgeSpan > 6 && bridgeIndex === middleIndex) ||
+        (!hasSpanInfo && (gridX + gridY) % 5 === 2)
+      );
       
       // Draw back suspension tower BEFORE the deck (shifted up)
       // Show on start/end tiles OR on middle tower tiles for long bridges
