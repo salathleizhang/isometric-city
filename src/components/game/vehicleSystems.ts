@@ -736,8 +736,8 @@ export function useVehicleSystems(
     
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
-    const baseMaxCars = 85;  // Reduced ~15%
-    const maxCars = Math.min(baseMaxCars, Math.max(13, Math.floor(currentGridSize * 1.06)));
+    const baseMaxCars = 200;
+    const maxCars = Math.min(baseMaxCars, Math.max(15, Math.floor(currentGridSize * 1.25)));
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
       // Spawn cars at a moderate rate
@@ -944,7 +944,7 @@ export function useVehicleSystems(
     }
     
     carsRef.current = updatedCars;
-  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection, isMobile]);
+  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection, isMobile, trainsRef]);
 
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
