@@ -41,7 +41,7 @@ export const PEDESTRIAN_UPDATE_SKIP_DISTANCE = 30;  // Skip detailed updates for
 
 // Zoom limits for camera
 export const ZOOM_MIN = 0.15;                     // Minimum zoom level (most zoomed out - for large maps/multiple cities)
-export const ZOOM_MAX = 7;                        // Maximum zoom level (most zoomed in)
+export const ZOOM_MAX = 5;                        // Maximum zoom level (most zoomed in)
 
 // Zoom thresholds for rendering detail elements
 // Lower values = more zoomed out, higher values = more zoomed in required
