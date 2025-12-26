@@ -1749,13 +1749,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const pillarW = 4;
       const pillarH = 22; // Extended further down into water
       
-      // Only draw pillar on every other tile to reduce count, and place at front position (0.65)
-      // to avoid being covered by water tiles rendered later
+      // Only draw pillar on every other tile to reduce count, and place at back position (0.35)
+      // Water tiles toward startEdge are rendered BEFORE this bridge tile, so pillar won't be covered
       const shouldDrawPillar = (bridgeIndex % 2 === 0) || position === 'start' || position === 'end';
       
       if (shouldDrawPillar) {
-        // Place pillar toward the "end" edge (front in render order) to avoid z-order issues
-        const pillarT = 0.65; // Position along the tile (0.65 = toward end/front)
+        // Place pillar toward the "start" edge (back in render order) - water there is already drawn
+        const pillarT = 0.35; // Position along the tile (0.35 = toward start/back)
         const pillarPos = {
           x: startEdge.x + (endEdge.x - startEdge.x) * pillarT,
           y: startEdge.y + (endEdge.y - startEdge.y) * pillarT
