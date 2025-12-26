@@ -40,7 +40,7 @@ function formatMoney(money: number): string {
 }
 
 export function SettingsPanel() {
-  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode, getSavedCityInfo, restoreSavedCity, clearSavedCity, savedCities, saveCity, loadSavedCity, deleteSavedCity, renameSavedCity } = useGame();
+  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, expandCity, shrinkCity, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode, getSavedCityInfo, restoreSavedCity, clearSavedCity, savedCities, saveCity, loadSavedCity, deleteSavedCity, renameSavedCity } = useGame();
   const { disastersEnabled, cityName, gridSize, id: currentCityId } = state;
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -195,6 +195,41 @@ export function SettingsPanel() {
               <div className="flex justify-between text-muted-foreground">
                 <span>Auto-Save</span>
                 <span className="text-green-400">Enabled</span>
+              </div>
+            </div>
+            
+            <div className="mt-4 space-y-3">
+              <div>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    expandCity();
+                  }}
+                >
+                  Expand City (+30x30)
+                </Button>
+                <p className="text-muted-foreground text-xs mt-1 text-center">
+                  Add 15 tiles on each side. Land edges extend as land, water edges extend as water.
+                </p>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const success = shrinkCity();
+                    if (!success) {
+                      alert('Cannot shrink city further - minimum size reached.');
+                    }
+                  }}
+                  disabled={gridSize <= 50}
+                >
+                  Shrink City (-30x30)
+                </Button>
+                <p className="text-muted-foreground text-xs mt-1 text-center">
+                  Remove 15 tiles from each edge. Buildings on edges will be deleted.
+                </p>
               </div>
             </div>
           </div>

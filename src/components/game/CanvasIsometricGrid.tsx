@@ -258,6 +258,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const roadAnalysisCacheRef = useRef<Map<string, ReturnType<typeof analyzeMergedRoad>>>(new Map());
   const roadAnalysisCacheVersionRef = useRef(-1);
 
+  // PERF: Cache background gradient - only recreate when canvas height changes
+  const bgGradientCacheRef = useRef<{ gradient: CanvasGradient | null; height: number }>({ gradient: null, height: 0 });
+
   // PERF: Render queue arrays cached across frames to reduce GC pressure
   // These are cleared at the start of each render frame with .length = 0
   type BuildingDrawItem = { screenX: number; screenY: number; tile: Tile; depth: number };
@@ -930,12 +933,17 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Disable image smoothing for crisp pixel art
       ctx.imageSmoothingEnabled = false;
     
-      // Clear canvas with gradient background
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#0f1419');
-      gradient.addColorStop(0.5, '#141c24');
-      gradient.addColorStop(1, '#1a2a1f');
-      ctx.fillStyle = gradient;
+      // PERF: Clear canvas with cached gradient background - only recreate when canvas height changes
+      const bgCache = bgGradientCacheRef.current;
+      if (!bgCache.gradient || bgCache.height !== canvas.height) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#0f1419');
+        gradient.addColorStop(0.5, '#141c24');
+        gradient.addColorStop(1, '#1a2a1f');
+        bgCache.gradient = gradient;
+        bgCache.height = canvas.height;
+      }
+      ctx.fillStyle = bgCache.gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     
       ctx.save();
@@ -2146,8 +2154,22 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const jitterX = (seedX - 0.5) * w * 0.3;
             const jitterY = (seedY - 0.5) * h * 0.3;
             
-            // For tiles with more water neighbors, draw blended passes
-            if (adjacentCount >= 2) {
+            // PERF: When zoomed out (zoom < 0.5), use single pass water rendering to reduce draw calls
+            // At low zoom, the blending detail is not visible anyway
+            if (zoom < 0.5) {
+              // Simplified single-pass water at low zoom
+              const destWidth = w * 1.15;
+              const destHeight = destWidth * aspectRatio;
+              ctx.globalAlpha = 0.9;
+              ctx.drawImage(
+                waterImage,
+                srcX, srcY, cropW, cropH,
+                Math.round(tileCenterX - destWidth / 2),
+                Math.round(tileCenterY - destHeight / 2),
+                Math.round(destWidth),
+                Math.round(destHeight)
+              );
+            } else if (adjacentCount >= 2) {
               // Two passes: large soft outer, smaller solid core
               // Outer pass - large, semi-transparent for blending
               const outerScale = 2.0 + adjacentCount * 0.3;
@@ -2968,19 +2990,22 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Draw beaches on water tiles (after water, outside clipping region)
     // Note: waterQueue is already sorted from above
-    // PERF: Use for loop instead of forEach
-    for (let i = 0; i < waterQueue.length; i++) {
-      const { tile, screenX, screenY } = waterQueue[i];
-      // Compute land adjacency for each edge (opposite of water adjacency)
-      // Only consider tiles within bounds - don't draw beaches on map edges
-      // Also exclude beaches next to marina docks, piers, and bridges (bridges are over water)
-      const adjacentLand = {
-        north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y) && !hasMarinaPier(tile.x - 1, tile.y) && !isBridge(tile.x - 1, tile.y),
-        east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1) && !hasMarinaPier(tile.x, tile.y - 1) && !isBridge(tile.x, tile.y - 1),
-        south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y) && !hasMarinaPier(tile.x + 1, tile.y) && !isBridge(tile.x + 1, tile.y),
-        west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1) && !hasMarinaPier(tile.x, tile.y + 1) && !isBridge(tile.x, tile.y + 1),
-      };
-      drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
+    // PERF: Skip beach rendering when zoomed out - detail is not visible
+    if (zoom >= 0.4) {
+      // PERF: Use for loop instead of forEach
+      for (let i = 0; i < waterQueue.length; i++) {
+        const { tile, screenX, screenY } = waterQueue[i];
+        // Compute land adjacency for each edge (opposite of water adjacency)
+        // Only consider tiles within bounds - don't draw beaches on map edges
+        // Also exclude beaches next to marina docks, piers, and bridges (bridges are over water)
+        const adjacentLand = {
+          north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y) && !hasMarinaPier(tile.x - 1, tile.y) && !isBridge(tile.x - 1, tile.y),
+          east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1) && !hasMarinaPier(tile.x, tile.y - 1) && !isBridge(tile.x, tile.y - 1),
+          south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y) && !hasMarinaPier(tile.x + 1, tile.y) && !isBridge(tile.x + 1, tile.y),
+          west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1) && !hasMarinaPier(tile.x, tile.y + 1) && !isBridge(tile.x, tile.y + 1),
+        };
+        drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
+      }
     }
     
     // PERF: Pre-compute tile dimensions once outside loops
@@ -3672,8 +3697,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // PERF: Hide lighting during mobile panning/zooming for better performance
-    if (isMobile && (isPanningRef.current || isPinchZoomingRef.current)) {
+    // PERF: Hide lighting during panning/zooming for better performance
+    // This prevents ugly light sampling artifacts and improves pan smoothness
+    if (isPanningRef.current || isPinchZoomingRef.current) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;

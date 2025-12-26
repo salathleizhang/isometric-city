@@ -15,6 +15,8 @@ import {
   bulldozeTile,
   createInitialGameState,
   DEFAULT_GRID_SIZE,
+  expandGrid,
+  shrinkGrid,
   placeBuilding,
   placeSubway,
   placeWaterTerraform,
@@ -66,6 +68,8 @@ type GameContextValue = {
   loadState: (stateString: string) => boolean;
   exportState: () => string;
   generateRandomCity: () => void;
+  expandCity: () => void;
+  shrinkCity: () => boolean;
   hasExistingGame: boolean;
   isSaving: boolean;
   addMoney: (amount: number) => void;
@@ -555,11 +559,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, []);
   
   // Track the state that needs to be saved
-  const stateToSaveRef = useRef<GameState | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
   const saveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Update the state to save whenever state changes
+  // PERF: Just mark that state has changed - defer expensive deep copy to actual save time
+  const stateChangedRef = useRef(false);
+  const latestStateRef = useRef(state);
+  latestStateRef.current = state;
+  
   useEffect(() => {
     if (!hasLoadedRef.current) {
       return;
@@ -571,8 +579,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     
-    // Store current state for saving (deep copy)
-    stateToSaveRef.current = JSON.parse(JSON.stringify(state));
+    // PERF: Just mark that state changed instead of expensive deep copy every time
+    stateChangedRef.current = true;
   }, [state]);
   
   // Separate effect that actually performs saves on an interval
@@ -604,15 +612,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        // Don't save if there's no state to save
-        if (!stateToSaveRef.current) {
+        // Don't save if state hasn't changed
+        if (!stateChangedRef.current) {
           return;
         }
+        
+        // PERF: Only do the deep copy when we actually save (not on every state change)
+        // Use structuredClone when available (faster than JSON parse/stringify)
+        const stateToSave = typeof structuredClone === 'function' 
+          ? structuredClone(latestStateRef.current)
+          : JSON.parse(JSON.stringify(latestStateRef.current));
+        stateChangedRef.current = false;
         
         // Perform the save
         setIsSaving(true);
         try {
-          saveGameState(stateToSaveRef.current);
+          saveGameState(stateToSave);
           lastSaveTimeRef.current = Date.now();
           setHasExistingGame(true);
         } finally {
@@ -1014,6 +1029,140 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // Expand the city grid by 15 tiles on each side (30x30 total increase)
+  const expandCity = useCallback(() => {
+    setState((prev) => {
+      const { grid: newGrid, newSize } = expandGrid(prev.grid, prev.gridSize, 15);
+      
+      // Create new service grids with expanded size (all initialized to 0)
+      const createServiceGrid = (): number[][] => {
+        const grid: number[][] = [];
+        for (let y = 0; y < newSize; y++) {
+          grid.push(new Array(newSize).fill(0));
+        }
+        return grid;
+      };
+      
+      // Copy old service values to new positions (offset by 15)
+      const expandServiceGrid = (oldGrid: number[][]): number[][] => {
+        const newServiceGrid = createServiceGrid();
+        const offset = 15;
+        // Safely iterate through the old grid
+        if (oldGrid && Array.isArray(oldGrid)) {
+          for (let y = 0; y < prev.gridSize; y++) {
+            const row = oldGrid[y];
+            if (row && Array.isArray(row)) {
+              for (let x = 0; x < prev.gridSize; x++) {
+                const value = row[x];
+                if (typeof value === 'number') {
+                  newServiceGrid[y + offset][x + offset] = value;
+                }
+              }
+            }
+          }
+        }
+        return newServiceGrid;
+      };
+      
+      return {
+        ...prev,
+        grid: newGrid,
+        gridSize: newSize,
+        // Expand all service grids
+        services: {
+          power: expandServiceGrid(prev.services.power),
+          water: expandServiceGrid(prev.services.water),
+          fire: expandServiceGrid(prev.services.fire),
+          police: expandServiceGrid(prev.services.police),
+          health: expandServiceGrid(prev.services.health),
+          education: expandServiceGrid(prev.services.education),
+          subway: expandServiceGrid(prev.services.subway),
+        },
+        // Update bounds
+        bounds: {
+          minX: 0,
+          minY: 0,
+          maxX: newSize - 1,
+          maxY: newSize - 1,
+        },
+        // Increment game version to reset vehicles/entities
+        gameVersion: (prev.gameVersion ?? 0) + 1,
+      };
+    });
+  }, []);
+
+  // Shrink the city grid by 15 tiles on each side (30x30 total reduction)
+  const shrinkCity = useCallback((): boolean => {
+    let success = false;
+    setState((prev) => {
+      const result = shrinkGrid(prev.grid, prev.gridSize, 15);
+      
+      // If shrink failed (grid too small), return previous state unchanged
+      if (!result) {
+        return prev;
+      }
+      
+      success = true;
+      const { grid: newGrid, newSize } = result;
+      
+      // Create new service grids with shrunken size
+      const createServiceGrid = (): number[][] => {
+        const grid: number[][] = [];
+        for (let y = 0; y < newSize; y++) {
+          grid.push(new Array(newSize).fill(0));
+        }
+        return grid;
+      };
+      
+      // Copy old service values from interior positions (offset by 15)
+      const shrinkServiceGrid = (oldGrid: number[][]): number[][] => {
+        const newServiceGrid = createServiceGrid();
+        const offset = 15;
+        // Safely iterate through the new grid
+        if (oldGrid && Array.isArray(oldGrid)) {
+          for (let y = 0; y < newSize; y++) {
+            const oldRow = oldGrid[y + offset];
+            if (oldRow && Array.isArray(oldRow)) {
+              for (let x = 0; x < newSize; x++) {
+                const value = oldRow[x + offset];
+                if (typeof value === 'number') {
+                  newServiceGrid[y][x] = value;
+                }
+              }
+            }
+          }
+        }
+        return newServiceGrid;
+      };
+      
+      return {
+        ...prev,
+        grid: newGrid,
+        gridSize: newSize,
+        // Shrink all service grids
+        services: {
+          power: shrinkServiceGrid(prev.services.power),
+          water: shrinkServiceGrid(prev.services.water),
+          fire: shrinkServiceGrid(prev.services.fire),
+          police: shrinkServiceGrid(prev.services.police),
+          health: shrinkServiceGrid(prev.services.health),
+          education: shrinkServiceGrid(prev.services.education),
+          subway: shrinkServiceGrid(prev.services.subway),
+        },
+        // Update bounds
+        bounds: {
+          minX: 0,
+          minY: 0,
+          maxX: newSize - 1,
+          maxY: newSize - 1,
+        },
+        // Increment game version to reset vehicles/entities
+        gameVersion: (prev.gameVersion ?? 0) + 1,
+      };
+    });
+    return success;
+  }, []);
+
   const addMoney = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -1241,6 +1390,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     loadState,
     exportState,
     generateRandomCity,
+    expandCity,
+    shrinkCity,
     hasExistingGame,
     isSaving,
     addMoney,
