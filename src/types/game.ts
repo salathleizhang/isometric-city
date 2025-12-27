@@ -86,6 +86,8 @@ export type Tool =
   | 'road'
   | 'rail'
   | 'subway'
+  | 'expand_city'
+  | 'shrink_city'
   | 'tree'
   | 'zone_residential'
   | 'zone_commercial'
@@ -153,6 +155,8 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
   road: { name: msg('Road'), cost: 25, description: msg('Connect your city') },
   rail: { name: msg('Rail'), cost: 40, description: msg('Build railway tracks') },
   subway: { name: msg('Subway'), cost: 50, description: msg('Underground transit') },
+  expand_city: { name: msg('Expand City'), cost: 0, description: msg('Add 15 tiles to each edge') },
+  shrink_city: { name: msg('Shrink City'), cost: 0, description: msg('Remove 15 tiles from each edge') },
   tree: { name: msg('Tree'), cost: 15, description: msg('Plant trees to improve environment') },
   zone_residential: { name: msg('Residential'), cost: 50, description: msg('Zone for housing') },
   zone_commercial: { name: msg('Commercial'), cost: 50, description: msg('Zone for shops and offices') },
