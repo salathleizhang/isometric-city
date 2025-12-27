@@ -4,6 +4,8 @@ IsoCity is a open-source isometric city-building simulation game built with **Ne
 
 ![IsoCity Banner](public/readme-image.png)
 
+Made with [Cursor](https://cursor.com)
+
 ## Features
 
 -   **Isometric Rendering Engine**: Custom-built rendering system using HTML5 Canvas (`CanvasIsometricGrid`) capable of handling complex depth sorting and layer management.
