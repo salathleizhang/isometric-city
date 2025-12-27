@@ -17,7 +17,6 @@ import {
   GameActionInput,
   Player,
   ConnectionState,
-  PlayerRole,
   RoomData,
 } from '@/lib/multiplayer/types';
 import { GameState } from '@/types/game';
@@ -35,7 +34,6 @@ function generateRoomCode(): string {
 interface MultiplayerContextValue {
   // Connection state
   connectionState: ConnectionState;
-  role: PlayerRole;
   roomCode: string | null;
   players: Player[];
   error: string | null;
@@ -48,21 +46,21 @@ interface MultiplayerContextValue {
   // Game action dispatch
   dispatchAction: (action: GameActionInput) => void;
   
-  // Initial state for guests
+  // Initial state for new players
   initialState: GameState | null;
   
   // Callback for when remote actions are received
   onRemoteAction: ((action: GameAction) => void) | null;
   setOnRemoteAction: (callback: ((action: GameAction) => void) | null) => void;
   
-  // Is this player the host?
-  isHost: boolean;
-  
-  // Update the game state that will be sent to new peers (host only)
+  // Update the game state (any player can do this now)
   updateGameState: (state: GameState) => void;
   
   // Provider instance (for advanced usage)
   provider: MultiplayerProvider | null;
+  
+  // Legacy compatibility - always false now since there's no host
+  isHost: boolean;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextValue | null>(null);
@@ -73,7 +71,6 @@ export function MultiplayerContextProvider({
   children: React.ReactNode;
 }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
-  const [role, setRole] = useState<PlayerRole>('solo');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +87,7 @@ export function MultiplayerContextProvider({
     []
   );
 
-  // Create a room as host
+  // Create a room (first player to start a session)
   const createRoom = useCallback(
     async (cityName: string, playerName: string, gameState: GameState): Promise<string> => {
       setConnectionState('connecting');
@@ -100,13 +97,12 @@ export function MultiplayerContextProvider({
         // Generate room code (no API needed - Supabase channels are created on-demand)
         const newRoomCode = generateRoomCode();
 
-        // Create multiplayer provider
+        // Create multiplayer provider with initial state
         const provider = await createMultiplayerProvider({
           roomCode: newRoomCode,
           cityName,
           playerName,
-          isHost: true,
-          initialGameState: gameState,
+          initialGameState: gameState, // This player has the state to share
           onConnectionChange: (connected, peerCount) => {
             setConnectionState(connected ? 'connected' : 'disconnected');
           },
@@ -122,7 +118,6 @@ export function MultiplayerContextProvider({
 
         providerRef.current = provider;
         setRoomCode(newRoomCode);
-        setRole('host');
         setConnectionState('connected');
 
         return newRoomCode;
@@ -135,7 +130,7 @@ export function MultiplayerContextProvider({
     []
   );
 
-  // Join an existing room as guest
+  // Join an existing room
   const joinRoom = useCallback(
     async (code: string, playerName: string): Promise<RoomData> => {
       setConnectionState('connecting');
@@ -144,13 +139,12 @@ export function MultiplayerContextProvider({
       try {
         const normalizedCode = code.toUpperCase();
         
-        // Create multiplayer provider as guest
-        // Supabase channels work directly - no need to verify room exists
+        // Create multiplayer provider (will receive state from other players)
         const provider = await createMultiplayerProvider({
           roomCode: normalizedCode,
           cityName: 'Co-op City',
           playerName,
-          isHost: false,
+          // No initialGameState - we'll receive it from others
           onConnectionChange: (connected, peerCount) => {
             setConnectionState(connected ? 'connected' : 'disconnected');
           },
@@ -169,7 +163,6 @@ export function MultiplayerContextProvider({
 
         providerRef.current = provider;
         setRoomCode(normalizedCode);
-        setRole('guest');
         setConnectionState('connected');
 
         // Return room data
@@ -199,7 +192,6 @@ export function MultiplayerContextProvider({
     }
 
     setConnectionState('disconnected');
-    setRole('solo');
     setRoomCode(null);
     setPlayers([]);
     setError(null);
@@ -216,14 +208,14 @@ export function MultiplayerContextProvider({
     []
   );
 
-  // Update the game state that will be sent to new peers (host only)
+  // Update the game state (any player can do this)
   const updateGameState = useCallback(
     (state: GameState) => {
-      if (providerRef.current && role === 'host') {
+      if (providerRef.current) {
         providerRef.current.updateGameState(state);
       }
     },
-    [role]
+    []
   );
 
   // Clean up on unmount
@@ -237,7 +229,6 @@ export function MultiplayerContextProvider({
 
   const value: MultiplayerContextValue = {
     connectionState,
-    role,
     roomCode,
     players,
     error,
@@ -248,9 +239,9 @@ export function MultiplayerContextProvider({
     initialState,
     onRemoteAction: onRemoteActionRef.current,
     setOnRemoteAction,
-    isHost: role === 'host',
     updateGameState,
     provider: providerRef.current,
+    isHost: false, // No longer meaningful - kept for compatibility
   };
 
   return (

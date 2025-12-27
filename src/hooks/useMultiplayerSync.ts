@@ -20,19 +20,18 @@ export function useMultiplayerSync() {
   const lastActionRef = useRef<string | null>(null);
   const initialStateLoadedRef = useRef(false);
 
-  // Load initial state when joining as guest
+  // Load initial state when joining a room (received from other players)
   useEffect(() => {
     if (!multiplayer || !multiplayer.initialState || initialStateLoadedRef.current) return;
-    if (multiplayer.isHost) return; // Host doesn't need to load initial state
     
-    // Use loadState to load the host's game state
+    // Use loadState to load the received game state
     const stateString = JSON.stringify(multiplayer.initialState);
     const success = game.loadState(stateString);
     
     if (success) {
       initialStateLoadedRef.current = true;
     }
-  }, [multiplayer?.initialState, multiplayer?.isHost, game]);
+  }, [multiplayer?.initialState, game]);
 
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
@@ -115,11 +114,11 @@ export function useMultiplayerSync() {
     };
   }, [multiplayer, multiplayer?.connectionState, game]);
 
-  // Keep the shared game state updated (for new peers joining)
+  // Keep the shared game state updated (any player can share with new peers)
   // Throttled to avoid excessive updates - only updates every 2 seconds
   const lastUpdateRef = useRef<number>(0);
   useEffect(() => {
-    if (!multiplayer || !multiplayer.isHost || multiplayer.connectionState !== 'connected') return;
+    if (!multiplayer || multiplayer.connectionState !== 'connected') return;
     
     const now = Date.now();
     if (now - lastUpdateRef.current < 2000) return; // Throttle to 2 second intervals

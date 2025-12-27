@@ -1,4 +1,4 @@
-// Simple Supabase Realtime multiplayer provider
+// Simple Supabase Realtime multiplayer provider (peer-to-peer, no host required)
 
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import {
@@ -18,8 +18,7 @@ export interface MultiplayerProviderOptions {
   roomCode: string;
   cityName: string;
   playerName: string;
-  isHost: boolean;
-  initialGameState?: unknown;
+  initialGameState?: unknown; // If provided, this player has state to share
   onConnectionChange?: (connected: boolean, peerCount: number) => void;
   onPlayersChange?: (players: Player[]) => void;
   onAction?: (action: GameAction) => void;
@@ -29,29 +28,29 @@ export interface MultiplayerProviderOptions {
 export class MultiplayerProvider {
   public readonly roomCode: string;
   public readonly peerId: string;
-  public readonly isHost: boolean;
 
   private channel: RealtimeChannel;
   private player: Player;
   private options: MultiplayerProviderOptions;
   private players: Map<string, Player> = new Map();
-  private initialGameState: unknown = null;
+  private gameState: unknown = null;
+  private hasReceivedState = false; // Prevent duplicate state processing
   private destroyed = false;
 
   constructor(options: MultiplayerProviderOptions) {
     this.options = options;
     this.roomCode = options.roomCode;
-    this.isHost = options.isHost;
     this.peerId = generatePlayerId();
-    this.initialGameState = options.initialGameState;
+    this.gameState = options.initialGameState || null;
+    this.hasReceivedState = !!options.initialGameState; // If we have state, we don't need to receive it
 
-    // Create player info
+    // Create player info (no host flag needed)
     this.player = {
       id: this.peerId,
       name: options.playerName,
       color: generatePlayerColor(),
       joinedAt: Date.now(),
-      isHost: options.isHost,
+      isHost: false, // No longer meaningful, kept for type compatibility
     };
 
     // Add self to players
@@ -96,13 +95,18 @@ export class MultiplayerProvider {
             this.notifyPlayersChange();
             this.updateConnectionStatus();
 
-            // Host sends initial state to new player
-            if (this.isHost && this.initialGameState) {
-              this.channel.send({
-                type: 'broadcast',
-                event: 'state-sync',
-                payload: { state: this.initialGameState, to: key },
-              });
+            // Any player with state sends it to new players
+            if (this.gameState) {
+              // Small delay to avoid race conditions with multiple senders
+              setTimeout(() => {
+                if (!this.destroyed && this.gameState) {
+                  this.channel.send({
+                    type: 'broadcast',
+                    event: 'state-sync',
+                    payload: { state: this.gameState, to: key, from: this.peerId },
+                  });
+                }
+              }, Math.random() * 200); // Random delay 0-200ms to stagger responses
             }
           }
         }
@@ -122,21 +126,28 @@ export class MultiplayerProvider {
         }
       })
       .on('broadcast', { event: 'state-sync' }, ({ payload }) => {
-        const { state, to } = payload as { state: unknown; to?: string };
-        // Only process if it's for us or broadcast to all
-        if ((!to || to === this.peerId) && this.options.onStateReceived) {
+        const { state, to } = payload as { state: unknown; to?: string; from?: string };
+        // Only process if it's for us and we haven't received state yet
+        if (to === this.peerId && !this.hasReceivedState && this.options.onStateReceived) {
+          this.hasReceivedState = true;
+          this.gameState = state; // Now we have state too
           this.options.onStateReceived(state);
         }
       })
       .on('broadcast', { event: 'state-request' }, ({ payload }) => {
         const { from } = payload as { from: string };
-        // Host responds to state requests
-        if (this.isHost && this.initialGameState) {
-          this.channel.send({
-            type: 'broadcast',
-            event: 'state-sync',
-            payload: { state: this.initialGameState, to: from },
-          });
+        // Any player with state can respond
+        if (this.gameState && from !== this.peerId) {
+          // Random delay to avoid multiple simultaneous responses
+          setTimeout(() => {
+            if (!this.destroyed && this.gameState) {
+              this.channel.send({
+                type: 'broadcast',
+                event: 'state-sync',
+                payload: { state: this.gameState, to: from, from: this.peerId },
+              });
+            }
+          }, Math.random() * 200);
         }
       });
 
@@ -151,8 +162,8 @@ export class MultiplayerProvider {
         }
         this.notifyPlayersChange();
 
-        // Guest requests state from host
-        if (!this.isHost) {
+        // If we don't have state, request it from anyone in the room
+        if (!this.gameState) {
           this.channel.send({
             type: 'broadcast',
             event: 'state-request',
@@ -181,7 +192,8 @@ export class MultiplayerProvider {
   }
 
   updateGameState(state: unknown): void {
-    this.initialGameState = state;
+    this.gameState = state;
+    this.hasReceivedState = true;
   }
 
   private updateConnectionStatus(): void {
