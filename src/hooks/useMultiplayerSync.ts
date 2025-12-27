@@ -34,49 +34,6 @@ export function useMultiplayerSync() {
     }
   }, [multiplayer?.initialState, multiplayer?.isHost, game]);
 
-  // Register callback to receive remote actions
-  useEffect(() => {
-    if (!multiplayer) return;
-
-    multiplayer.setOnRemoteAction((action: GameAction) => {
-      // Apply remote actions to local game state
-      applyRemoteAction(action);
-    });
-
-    return () => {
-      multiplayer.setOnRemoteAction(null);
-    };
-  }, [multiplayer]);
-  
-  // Register callback to broadcast local placements
-  useEffect(() => {
-    if (!multiplayer || multiplayer.connectionState !== 'connected') {
-      game.setPlaceCallback(null);
-      return;
-    }
-    
-    game.setPlaceCallback((x: number, y: number, tool: Tool) => {
-      if (tool === 'bulldoze') {
-        multiplayer.dispatchAction({ type: 'bulldoze', x, y });
-      } else if (tool !== 'select') {
-        multiplayer.dispatchAction({ type: 'place', x, y, tool });
-      }
-    });
-    
-    return () => {
-      game.setPlaceCallback(null);
-    };
-  }, [multiplayer, multiplayer?.connectionState, game]);
-
-  // Keep the shared game state updated (for new peers joining)
-  // This runs on every state change for the host
-  useEffect(() => {
-    if (!multiplayer || !multiplayer.isHost || multiplayer.connectionState !== 'connected') return;
-    
-    // Update the game state that will be sent to new peers
-    multiplayer.updateGameState(game.state);
-  }, [multiplayer, game.state]);
-
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
     switch (action.type) {
@@ -123,6 +80,49 @@ export function useMultiplayerSync() {
         break;
     }
   }, [game]);
+
+  // Register callback to receive remote actions
+  useEffect(() => {
+    if (!multiplayer) return;
+
+    multiplayer.setOnRemoteAction((action: GameAction) => {
+      // Apply remote actions to local game state
+      applyRemoteAction(action);
+    });
+
+    return () => {
+      multiplayer.setOnRemoteAction(null);
+    };
+  }, [multiplayer, applyRemoteAction]);
+  
+  // Register callback to broadcast local placements
+  useEffect(() => {
+    if (!multiplayer || multiplayer.connectionState !== 'connected') {
+      game.setPlaceCallback(null);
+      return;
+    }
+    
+    game.setPlaceCallback((x: number, y: number, tool: Tool) => {
+      if (tool === 'bulldoze') {
+        multiplayer.dispatchAction({ type: 'bulldoze', x, y });
+      } else if (tool !== 'select') {
+        multiplayer.dispatchAction({ type: 'place', x, y, tool });
+      }
+    });
+    
+    return () => {
+      game.setPlaceCallback(null);
+    };
+  }, [multiplayer, multiplayer?.connectionState, game]);
+
+  // Keep the shared game state updated (for new peers joining)
+  // This runs on every state change for the host
+  useEffect(() => {
+    if (!multiplayer || !multiplayer.isHost || multiplayer.connectionState !== 'connected') return;
+    
+    // Update the game state that will be sent to new peers
+    multiplayer.updateGameState(game.state);
+  }, [multiplayer, game.state]);
 
   // Broadcast a local action to peers
   const broadcastAction = useCallback((action: GameActionInput) => {
