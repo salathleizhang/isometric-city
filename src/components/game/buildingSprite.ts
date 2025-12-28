@@ -421,8 +421,8 @@ export function calculateSpriteCoords(
     const tileWidth = Math.floor(sheetWidth / mansionsCols);
     const tileHeight = Math.floor(sheetHeight / mansionsRows);
     
-    // Apply same height extension as modern apartment_high
-    const sourceH = tileHeight * 1.05;
+    // Extend height to capture full building (1.05 base + 0.15 for bottom)
+    const sourceH = tileHeight * 1.20;
 
     return {
       sx: variant.col * tileWidth,

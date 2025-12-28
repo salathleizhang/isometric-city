@@ -74,7 +74,8 @@ export function CoopModal({
           // Check if we have a saved state for this room
           const savedState = loadRoomState(pendingRoomCode);
           if (savedState) {
-            console.log('[CoopModal] Found saved state for room, loading offline...');
+            console.log('[CoopModal] Found saved state for room, loading with background sync...');
+            setStartedWithCache(true); // Keep connection alive for background sync
             onStartGame(false, savedState);
             onOpenChange(false);
           } else {
@@ -86,11 +87,15 @@ export function CoopModal({
     }
   }, [open, pendingRoomCode, autoJoinAttempted, joinRoom, onStartGame, onOpenChange]);
 
+  // Track if we started with cached state (to keep connection alive)
+  const [startedWithCache, setStartedWithCache] = useState(false);
+  
   // Reset state when modal closes - cleanup any pending connection
   useEffect(() => {
     if (!open) {
-      // If we were waiting for state (mid-join), clean up the connection
-      if (waitingForState || (autoJoinAttempted && !initialState)) {
+      // Only clean up connection if we were mid-join and NOT started with cached state
+      // If we started with cache, keep connection alive for background sync
+      if ((waitingForState || (autoJoinAttempted && !initialState)) && !startedWithCache) {
         leaveRoom();
       }
       setMode('select');
@@ -98,8 +103,9 @@ export function CoopModal({
       setCopied(false);
       setAutoJoinAttempted(false);
       setWaitingForState(false);
+      setStartedWithCache(false);
     }
-  }, [open, waitingForState, autoJoinAttempted, initialState, leaveRoom]);
+  }, [open, waitingForState, autoJoinAttempted, initialState, leaveRoom, startedWithCache]);
 
   const handleCreateRoom = async () => {
     if (!cityName.trim()) return;
@@ -143,8 +149,9 @@ export function CoopModal({
       // Check if we have a saved state for this room
       const savedState = loadRoomState(joinCode);
       if (savedState) {
-        console.log('[CoopModal] Failed to join but found saved state, loading offline...');
+        console.log('[CoopModal] Failed to join but found saved state, loading with background sync...');
         window.history.replaceState({}, '', `/?room=${joinCode.toUpperCase()}`);
+        setStartedWithCache(true); // Keep connection alive for background sync
         onStartGame(false, savedState);
         onOpenChange(false);
       }
@@ -174,8 +181,9 @@ export function CoopModal({
         const savedState = roomToCheck ? loadRoomState(roomToCheck) : null;
         
         if (savedState) {
-          console.log('[CoopModal] Found saved state for room, loading...');
+          console.log('[CoopModal] Found saved state for room, loading with background sync...');
           setWaitingForState(false);
+          setStartedWithCache(true); // Keep connection alive for background sync
           // Start game with saved state (not as host since we're trying to join)
           onStartGame(false, savedState);
           onOpenChange(false);

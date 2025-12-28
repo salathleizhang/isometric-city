@@ -544,7 +544,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     ],
   },
   mansionsVerticalOffsets: {
-    mansion: -0.95, // Adjusted up 0.15 tiles from -0.80
+    mansion: -0.65, // Shifted down 0.3 tiles from -0.95
   },
   mansionsScales: {
     mansion: 0.90, // Same as modern apartment_high scale

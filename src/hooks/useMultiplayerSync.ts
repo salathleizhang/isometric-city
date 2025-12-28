@@ -83,8 +83,16 @@ export function useMultiplayerSync() {
   }, [multiplayer]);
 
   // Load initial state when joining a room (received from other players)
+  // This can happen even if we already loaded from cache - network state takes priority
+  const lastInitialStateRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!multiplayer || !multiplayer.initialState || initialStateLoadedRef.current) return;
+    if (!multiplayer || !multiplayer.initialState) return;
+    
+    // Only load if this is a new state (prevent duplicate loads of same state)
+    const stateKey = JSON.stringify(multiplayer.initialState.stats?.tick || 0);
+    if (lastInitialStateRef.current === stateKey && initialStateLoadedRef.current) return;
+    
+    console.log('[useMultiplayerSync] Received initial state from network, loading...');
     
     // Use loadState to load the received game state
     const stateString = JSON.stringify(multiplayer.initialState);
@@ -92,6 +100,7 @@ export function useMultiplayerSync() {
     
     if (success) {
       initialStateLoadedRef.current = true;
+      lastInitialStateRef.current = stateKey;
     }
   }, [multiplayer?.initialState, game]);
 
