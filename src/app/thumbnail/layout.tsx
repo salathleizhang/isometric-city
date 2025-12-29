@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'OG Preview — IsoCity',
+  title: { absolute: 'OG Preview — IsoCity' },
   robots: 'noindex, nofollow',
 };
 
